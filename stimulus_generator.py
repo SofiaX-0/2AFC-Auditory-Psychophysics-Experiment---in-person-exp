@@ -56,7 +56,7 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, phys_
         params.update({
             'left_dist_type': 'Exponential',
             'left_exp_peak_at_boundary_flag': True,
-            'decay_rate_magnitude_left': 2.0,
+            'decay_rate_magnitude_left': 2.153,
             'right_dist_type': 'Uniform'
         })
     elif condition_name == 'Hard-B':
@@ -64,7 +64,7 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, phys_
             'left_dist_type': 'Uniform',
             'right_dist_type': 'Exponential',
             'right_exp_peak_at_boundary_flag': True,
-            'decay_rate_magnitude_right': 2.0
+            'decay_rate_magnitude_right': 2.153
         })
     else:
         params.update({'left_dist_type': 'Uniform', 'right_dist_type': 'Uniform'})
