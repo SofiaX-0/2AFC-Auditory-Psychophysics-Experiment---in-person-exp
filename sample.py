@@ -97,7 +97,7 @@ params = {
 
     # Right Side Parameters
     'right_dist_type': 'Sinusoidal',
-    'decay_rate_magnitude_right': 5.0,
+    'decay_rate_magnitude_right': 2.153,
     'normal_mean_right': 0.5,
     'normal_std_dev_right': 0.15,
     'half_normal_std_dev_right': 0.2,
@@ -106,8 +106,8 @@ params = {
     'range_percentage_right': 100.0,
 
     # Central Sampling Bias Parameters
-    'P_central_region': 0.3,
-    'central_region_width': 0.2,
+    'P_central_region': 0.0,
+    'central_region_width': 0.0,
 
     # Simulation Parameters
     'num_simulations': 200,
@@ -115,7 +115,7 @@ params = {
 
     # Plot Update Specific Parameters
     'ax_handle': None,
-    'current_stimulus': np.nan,
+    'current_stimulus': np.nan, # no figure for now
     'samples_history_in': [],
     'plot_handles_in': {},
     'plot_histogram': True,
@@ -144,12 +144,15 @@ total_prob = params['left_probability'] + params['right_probability']
 if total_prob == 0:
     raise ValueError('left_probability and right_probability cannot both be zero.')
 
-P_left_derived = params['left_probability'] / total_prob
+P_left_derived = params['left_probability'] / total_prob # normalized probability of left side
 
 # --- Determine Peak Behavior Flags for each distribution type ---
 def check_dist(dist_str, target, is_anti=False):
-    target_in = target.lower() in dist_str.lower()
-    anti_in = 'anti' in dist_str.lower()
+    '''
+    Check if the target distribution is in the distribution string (name of the distribution).
+    '''
+    target_in = target.lower() in dist_str.lower() # Is target in the distribution string?
+    anti_in = 'anti' in dist_str.lower() # Is 'anti' in the distribution string?
     if is_anti:
         return target_in and anti_in
     return target_in and not anti_in
@@ -193,8 +196,8 @@ def get_pdf_general(x, dist_type_full_name, current_params, min_val, max_val,
         x (array_like): Input values where the PDF is evaluated.
         dist_type_full_name (str): Type of distribution (e.g., 'normal', 'exponential').
         current_params (dict): Dictionary containing distribution parameters (mu, sigma, lambda, etc.).
-        min_val (float): Lower bound of the truncation range.
-        max_val (float): Upper bound of the truncation range.
+        min_val (float): Lower bound of the truncation range of this distribution.
+        max_val (float): Upper bound of the truncation range of this distribution.
         is_exp_peak_at_boundary_flag (bool): If True, peaks the exponential dist at the main boundary.
         is_hn_peak_at_boundary_flag (bool): If True, peaks the half-normal dist at the main boundary.
         is_sin_peak_at_boundary_flag (bool): If True, peaks the sinusoidal dist at the main boundary.
@@ -225,8 +228,8 @@ def get_pdf_general(x, dist_type_full_name, current_params, min_val, max_val,
                 lambda_eff = abs(lam) if min_val < current_main_boundary else -abs(lam)
             else:
                 lambda_eff = -abs(lam) if min_val < current_main_boundary else abs(lam)
-
-            denominator = np.exp(lambda_eff * max_val) - np.exp(lambda_eff * min_val)
+            ## Normalization
+            denominator = np.exp(lambda_eff * max_val) - np.exp(lambda_eff * min_val) # denominator of the normalization factor
             if denominator == 0:
                 pdf_val[idx_in_range] = 0
             else:
@@ -271,8 +274,11 @@ def get_pdf_general(x, dist_type_full_name, current_params, min_val, max_val,
             target_x_peak = min_val if (min_val < current_main_boundary and max_val == current_main_boundary) else max_val
             
         calculated_phase = np.pi/2 - frequency * np.pi * (target_x_peak - min_val) / range_length
-
+        ## Normalization
         def unnormalized_func(val):
+            '''
+            Unnormalized function of the sinusoidal distribution.
+            '''
             return 1 + amplitude * np.sin(frequency * np.pi * (val - min_val) / range_length + calculated_phase)
         
         if frequency == 0:
@@ -282,10 +288,10 @@ def get_pdf_general(x, dist_type_full_name, current_params, min_val, max_val,
             integral_val = (range_length * (1 + amplitude * np.sin(calculated_phase)) - 
                            (amplitude / k_norm) * (np.cos(frequency * np.pi + calculated_phase) - np.cos(calculated_phase)))
         
-        normalization_constant = 1 / integral_val if integral_val > 0 else 0
+        normalization_constant = 1 / integral_val if integral_val > 0 else 0 # if integral_val is 0, then the normalization constant is 0
         pdf_val[idx_in_range] = normalization_constant * unnormalized_func(x_in_range)
 
-    return pdf_val
+    return pdf_val # => array of pdf values for the input x values
 
 
 def generate_rand_general(dist_type_full_name, current_params, min_val, max_val, 
@@ -302,18 +308,17 @@ def generate_rand_general(dist_type_full_name, current_params, min_val, max_val,
         Generate a single random sample from the specified truncated distribution.
 
         This function uses Inverse Transform Sampling to convert a uniform random 
-        number (0 to 1) into a value that follows the shape of the chosen 
+        number [0, 1) into a value that follows the shape of the chosen 
         distribution (Uniform, Exponential, Normal, Half-Normal, or Sinusoidal) 
         within the bounds [min_val, max_val].
 
         Returns:
             float: A single random value sampled from the target distribution.
-            Defaults to a uniform sample if calculation fails or 
-            parameters are invalid.
+            Defaults to a uniform sample if calculation fails or parameters are invalid.
         """
         u_val_used = np.random.rand() # uniformly sample from [0,1)
         dist_name = dist_type_full_name.lower()
-        val = min_val + u_val_used * range_length
+        val = min_val + u_val_used * range_length # val is the uniform sample from [min_val, max_val)
 
         # --- Case: Uniform ---
         if dist_name == 'uniform':
@@ -335,7 +340,7 @@ def generate_rand_general(dist_type_full_name, current_params, min_val, max_val,
                 if term_inside_log <= 0:
                     val = min_val + u_val_used * range_length
                 else:
-                    val = (1.0 / lambda_eff) * np.log(term_inside_log) # => solve x
+                    val = (1.0 / lambda_eff) * np.log(term_inside_log) # => val is the sample from the exponential distribution
 
         # --- Case: Normal ---
         elif dist_name == 'normal':
@@ -405,10 +410,10 @@ def generate_rand_general(dist_type_full_name, current_params, min_val, max_val,
                     val = brentq(cdf_func_sinusoidal, min_val, max_val)
                 except:
                     val = min_val + u_val_used * range_len
-        return val
+        return val # => val is the sample from the sinusoidal distribution
 
     # Initial generation attempt
-    rand_val = generate_single_attempt()
+    rand_val = generate_single_attempt() # actually a sample from the distribution
 
     # Ensure rand_val is strictly between min_val and max_val
     while rand_val <= min_val or rand_val >= max_val:
@@ -421,11 +426,14 @@ def initialize_static_plot(ax, total_pdf_vals, x_plot, overall_left_edge, overal
                            main_boundary_actual, min_central_sampling_range, 
                            max_central_sampling_range, active_left_dist_start, 
                            active_right_dist_end, plot_legend):
-    ax.clear()
+    '''
+    Plot the static elements of the plot.
+    '''
+    ax.clear() # clear the axes
     
     # Plot the Bimodal Probability Density Function (PDF)
-    h_pdf, = ax.plot(x_plot, total_pdf_vals, 'b-', linewidth=2, label='Overall PDF')
-    pdf_max = np.max(total_pdf_vals) if len(total_pdf_vals) > 0 else 1.0
+    h_pdf, = ax.plot(x_plot, total_pdf_vals, 'b-', linewidth=2, label='Overall PDF') # theoretical PDF(1st element of the list)
+    pdf_max = np.max(total_pdf_vals) if len(total_pdf_vals) > 0 else 1.0 # pdf_max is the highest point of pdf function
     y_limit = pdf_max * 1.1
 
     # Add a dashed red line at the main boundary (x=0) for clarity
@@ -438,10 +446,10 @@ def initialize_static_plot(ax, total_pdf_vals, x_plot, overall_left_edge, overal
                                       linewidth=1, label='Central Bias Zone Boundary')
     
     # Boundary text
-    h_central_text_left = ax.text(min_central_sampling_range, y_limit * 1.05, f'CB Start ({min_central_sampling_range:.2f})', 
-            color='g', fontsize=8, ha='center', va='bottom')
-    h_central_text_right = ax.text(max_central_sampling_range, y_limit * 1.05, f'CB End ({max_central_sampling_range:.2f})', 
-            color='g', fontsize=8, ha='center', va='bottom')
+    # h_central_text_left = ax.text(min_central_sampling_range, y_limit * 1.05, f'CB Start ({min_central_sampling_range:.2f})', 
+    #         color='g', fontsize=8, ha='center', va='bottom')
+    # h_central_text_right = ax.text(max_central_sampling_range, y_limit * 1.05, f'CB End ({max_central_sampling_range:.2f})', 
+    #         color='g', fontsize=8, ha='center', va='bottom')
 
     # Plot the overall range boundaries (user-defined edges)
     h_overall_left_edge_line = ax.axvline(x=overall_left_edge, color='k', linestyle='--', linewidth=1)
@@ -470,7 +478,7 @@ def initialize_static_plot(ax, total_pdf_vals, x_plot, overall_left_edge, overal
     ax.grid(True, linestyle=':', alpha=0.6)
     
     x_range = overall_right_edge - overall_left_edge
-    ax.set_xlim(overall_left_edge - 0.1 * x_range, overall_right_edge + 0.1 * x_range)
+    ax.set_xlim(overall_left_edge - 0.1 * x_range, overall_right_edge + 0.1 * x_range) 
     ax.set_ylim(0, y_limit * 1.2)
 
     plot_handles = {
@@ -478,8 +486,8 @@ def initialize_static_plot(ax, total_pdf_vals, x_plot, overall_left_edge, overal
         'h_main_boundary_line': h_main_boundary_line,
         'h_central_left_line': h_central_left_line,
         'h_central_right_line': h_central_right_line,
-        'h_central_text_left': h_central_text_left,
-        'h_central_text_right': h_central_text_right,
+        # 'h_central_text_left': h_central_text_left,
+        # 'h_central_text_right': h_central_text_right,
         'h_overall_left_edge_line': h_overall_left_edge_line,
         'h_overall_right_edge_line': h_overall_right_edge_line,
         # 'h_overall_left_edge_text': h_overall_left_edge_text,
@@ -513,10 +521,13 @@ def initialize_static_plot(ax, total_pdf_vals, x_plot, overall_left_edge, overal
 def update_dynamic_plot(ax, current_stimulus, samples_history_in, plot_handles_in, 
                         plot_histogram_flag, plot_chosen_stimuli_flag, 
                         plot_legend_flag, plot_distribution_flag):
+    '''
+    Updates sample history, histogram, pick marker/label, legend visibility, and static distribution artists on the axes for the current trial.
+    '''
     
     samples_history_out = list(samples_history_in)
     if not np.isnan(current_stimulus):
-        samples_history_out.append(current_stimulus)
+        samples_history_out.append(current_stimulus) # make a copy
     
     plot_handles_out = plot_handles_in
     # Update Histogram
@@ -589,7 +600,7 @@ def main_logic(params, P_left_derived, overall_left_edge, overall_right_edge,
     for side in ['left', 'right']:
         dist_type = params.get(f'{side}_dist_type', '').lower()
         if 'exponential' in dist_type:
-            mag = params.get(f'decay_rate_magnitude_{side}', 0)
+            mag = params.get(f'decay_rate_magnitude_{side}', 0) # mag is 
             params[f'lambda_{side}_actual'] = -mag if 'anti' in dist_type else mag
         else:
             params[f'lambda_{side}_actual'] = 0
@@ -764,4 +775,4 @@ def main_logic(params, P_left_derived, overall_left_edge, overall_right_edge,
         print("Simulation complete.")
         return samples_history_out, fig, plot_handles_out
 
-    return samples_history_out, None, plot_handles_out
+    return samples_history_out, None, plot_handles_out # None: align different modes

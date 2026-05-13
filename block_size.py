@@ -5,7 +5,7 @@
 #############################################################################################
 
 
-from random import randint,shuffle
+from random import randint, shuffle
 
 
 def block_size(group):
@@ -21,9 +21,9 @@ def block_size(group):
     Group 1: N = 4, bi=[130,210];
     Change the rule;
 
-    B. return the block size arrangement, ready to be writen into the main csv doc. 
+    B. return the block size arrangement, ready to be written into the main csv doc. 
     '''
-    target_sum = 30 # total trail number
+    target_sum = 30 # total trial number
     max_attempts = 1000 # attempts to find series
 
     if group == 0: # short-block group
@@ -69,8 +69,11 @@ def block_size(group):
 
     d = int(min(avg - b_min, b_max - avg) - 2)
 
-    res[0] += max(0, d)
-    res[1] -= max(0, d)
+    delta = max(0, d)
+    actual_delta = min(delta, res[1] - b_min)
+
+    res[0] += actual_delta
+    res[1] -= actual_delta
     
     shuffle(res)
     return res, N

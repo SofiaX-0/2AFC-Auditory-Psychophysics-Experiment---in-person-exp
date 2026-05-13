@@ -12,7 +12,7 @@ Different learning algorithms achieve shared optimal outcomes in humans, rats,
 and mice. bioRxiv, 2023.01.30.526119. https://doi.org/10.1101/2023.01.30.526119
 
 
-Interstiulus intervals: 
+Interstimulus intervals: 
         350ms Fixation;
         (300ms stimulus);
         4000ms waiting for response;
@@ -49,7 +49,7 @@ prefs.hardware['audioLib'] = ['sounddevice', 'ptb', 'pyo']
 prefs.hardware['audioLatencyMode'] = 0
 
 
-# clear commend prompt 
+# clear command prompt 
 def clear_output():
     os.system('cls' if os.name == 'nt' else 'clear') # cls on Windows; others: clear 
     print("Debug: clear screen")
@@ -63,7 +63,7 @@ def experiment_update():
     ## basic settings
     TOTAL_SESSION = 7
     response_limit = 4
-    fixiation = 0.35
+    fixation_duration = 0.35
     feedback = 0.35
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
@@ -104,11 +104,11 @@ def experiment_update():
     
     ## feedback images
     img_correct_path = os.path.join(SCRIPT_DIR, "images","correct.png")
-    img_wrong_path = os. path.join(SCRIPT_DIR, "images","wrong.png")
+    img_wrong_path = os.path.join(SCRIPT_DIR, "images","wrong.png")
 
 
     Instruction = (
-    f"Welcome to this experiment!\n\nPlease DO NOT CHANGE the device volumn during the experiment.\n\n"
+    f"Welcome to this experiment!\n\nPlease DO NOT CHANGE the device volume during the experiment.\n\n"
     f"In each trial, you will hear a sound. Your task is to classify the sound "
     f"into one of the two categories: A or B.\n\n"
     f"Press [←] LEFT arrow key for Category A.\n"
@@ -125,13 +125,11 @@ def experiment_update():
     
     ### initialization
     curr_sess = 0
-    trial_resp = 0 # number of trials with a respond in the whole session
-    trial_resp_blk = 0 # number of trials with a respond in current block
+    trial_resp = 0 # number of trials with a response in the whole session
+    trial_resp_blk = 0 # number of trials with a response in current block
     curr_trial_sess = 0 # current trial no. in the whole session
     corr_counter_block = 0
     corr_counter_session = 0
-    curr_blk_start_dist = randint(1,2) 
-    # 1: 1st block is hard-A, 2:hard-B
     
     ## ===================================================================
     ## INFO PAGE ---------------------------------------------------------
@@ -299,6 +297,7 @@ def experiment_update():
         keys = event.getKeys(keyList=['space', 'q'])
         if 'space' in keys:
             continue_loop = False
+        ## quit option for test
         if 'q' in keys:
             win0.close()
             core.quit()
@@ -309,17 +308,9 @@ def experiment_update():
     ## =========================================================================
     ## SESSION CONDITIONS -------------------------------------------------------
     ## 1) feedback imgs & Block size arrangement; => curr_block_arr, curr_total_block
-    ## 2) Whether to include traning trials. [dep. on: current session]
+    ## 2) Whether to include training trials. [dep. on: current session]
     ## 3) initialize finish and last_trial flags.
     ## 4) side rule: 0 = A (left) for lower amp ; 1 = A (left) for higher amp
-
-    ### create a sound object
-    base_noise = generate_white_noise(duration=0.3, 
-                                  sample_rate=44100, 
-                                  amplitude=1.0)
-    
-    print("White noise ready!")
-    probe = base_noise
 
     ### feedback images setting
     img_correct = visual.ImageStim(win0, image=img_correct_path, 
@@ -333,7 +324,7 @@ def experiment_update():
 
     train = False
     if curr_sess == 1:
-        curr_total_block+= 1 # add a traning 'block'
+        curr_total_block+= 1 # add a training 'block'
         curr_block_arr.insert(0, 30)
         train = True
     
@@ -358,23 +349,20 @@ def experiment_update():
         if train == True:
             if block_no == 1:
                 updated_dist = 0 # uniform
-            if (block_no > 1) and (block_no % 2 == 0):
-                updated_dist = curr_blk_start_dist
-            if (block_no > 1) and (block_no % 2 == 1):
-                updated_dist = 3 -  curr_blk_start_dist # 1->2; 2 -> 1
-        else: # no traning 'block'
-            if block_no % 2 == 0:
-                updated_dist = 3 - curr_blk_start_dist
-            if block_no % 2 == 1:
-                updated_dist = curr_blk_start_dist
+            if block_no > 1:
+                updated_dist = randint(1, 2) # 1 = hard-A, 2 = hard-B
+        else: # no training 'block'
+            updated_dist = randint(1, 2)
         # generate samples for this block
-        # sample_in_block(id, session, distribution_type, num_block, num_trials, phys_boundary=0.5, amp_scale=0.45)
+        # sample_in_block(id, session, distribution_type, num_block, num_trials, physical_min, physical_max)
+        # physical_min/max are measured in dba
         df_block_sample = sample_in_block(subj_id,curr_sess,
                                           updated_dist, updated_block_no,curr_block_arr[block_no-1])
-        amplitudes = df_block_sample['Physical_Amplitude']
+        amplitudes = df_block_sample['Target_dba']
         logical_values = df_block_sample['Logical_Value']
         corr_sides = df_block_sample['Side']
-        distances = df_block_sample['Distance_to_Boundary']
+        distances = df_block_sample['Distance_toB_in_dba']
+        boundary = df_block_sample['Physical_Boundary'].iloc[0]
 
 
         for trial_no in range(1, curr_block_arr[block_no-1] + 1):
@@ -384,7 +372,7 @@ def experiment_update():
             updated_blk_trial = trial_no # current trial in block
             curr_trial_sess += 1
             
-            ### Fixiation
+            ### Fixation
             fixation = visual.ShapeStim(win0, 
                     vertices=((0, -30), (0, 30), (0, 0), (-30, 0), (30, 0)),
                     lineWidth=5,
@@ -394,7 +382,7 @@ def experiment_update():
                     )
             fixation.draw()
             win0.flip()
-            core.wait(fixiation)
+            core.wait(fixation_duration)
 
             ### Listen
             text_stim.setText('Listen')
@@ -404,11 +392,22 @@ def experiment_update():
             win0.flip()
             #### set stimulus amplitude
             updated_amp = amplitudes.iloc[trial_no-1]
-            updated_logical_value = logical_values[trial_no-1]
+            # temporary linear mapping from dBA to PsychoPy volume!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            playback_volume = ((updated_amp - 45)/(75 - 45))
+
+            playback_volume = np.clip(playback_volume, 0.0, 1.0)
+
+            updated_logical_value = logical_values.iloc[trial_no-1]
             distance = distances.iloc[trial_no-1]
             true_cat = corr_sides.iloc[trial_no-1]
-            boundary = 0.5
-            probe.setVolume(updated_amp)
+            ### create a sound object
+            base_noise = generate_white_noise(duration=0.3, 
+                                        sample_rate=44100, 
+                                        amplitude=1.0)
+            
+            probe = base_noise
+
+            probe.setVolume(playback_volume)
             probe.play()
             core.wait(probe.getDuration())
 
@@ -508,6 +507,7 @@ def experiment_update():
                         print('DEBUG: Trial Number: %d' %(trial_no))
                         print('DEBUG: B chosen.')
                     elif key_name == 'q':
+                        win0.close()
                         core.quit()
                     break
             
@@ -669,9 +669,9 @@ def create_exp_file(id,group,first_record):
     try:
         final_to_save.to_csv(pull_file, index=False, encoding='utf-8-sig')
         pure_file_path = os.path.join(RESULT_PATH, f"{id}{group}")
-        print('Debug: to {pull_file}.')
+        print(f'Debug: to {pull_file}.')
         return pure_file_path
-    except:
+    except Exception as e:
             print('Debug: Problems saving file.')
 
 
