@@ -108,22 +108,23 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
         })
     if num_trials < 5:
         n_bins = 3
-    elif num_trials < 30:
+    elif num_trials <= 30:
         n_bins = 5
-    elif num_trials < 60:
-        n_bins = 8
     else:
-        n_bins = 30
+        n_bins = 12
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.hist(
+    _, bins, _ = ax.hist(
         all_logical_values,
         bins=n_bins,
         range=(-1, 1),
-        density=True,
+        density=False,
         alpha=0.7,
         color='steelblue',
         edgecolor='black'
     )
+    bin_width = bins[1] - bins[0]
+    n_samples = len(all_logical_values)
+
     ## theoretical distribution
     '''
     from sample.py -> def get_pdf_general(x, dist_type_full_name, current_params, min_val, max_val, 
@@ -160,10 +161,11 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
             0.0
         )
 
+        theo_counts_left = theo_pdf_left * n_samples * bin_width
 
         ax.plot(
             x_vals_left,
-            theo_pdf_left,
+            theo_counts_left,
             'r-',
             linewidth=2,
             label='Theoretical: Exponential'
@@ -189,9 +191,11 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
             0.0
         )
 
+        theo_counts_right = theo_pdf_right * n_samples * bin_width
+
         ax.plot(
             x_vals_right,
-            theo_pdf_right,
+            theo_counts_right,
             'g--',
             linewidth=2,
             label='Theoretical: Uniform'
@@ -218,10 +222,11 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
             False,
             0.0
         )
+        theo_counts_left = theo_pdf_left * n_samples * bin_width
 
         ax.plot(
             x_vals_left,
-            theo_pdf_left,
+            theo_counts_left,
             'g--',
             linewidth=2,
             label='Theoretical: Uniform'
@@ -246,10 +251,10 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
             False,
             0.0
         )
-
+        theo_counts_right = theo_pdf_right * n_samples * bin_width
         ax.plot(
             x_vals_right,
-            theo_pdf_right,
+            theo_counts_right,
             'r-',
             linewidth=2,
             label='Theoretical: Exponential'
@@ -276,18 +281,19 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
             False,
             0.0
         )
+        theo_counts = theo_pdf * n_samples * bin_width
 
         ax.plot(
             x_vals,
-            theo_pdf,
+            theo_counts,
             'g--',
             linewidth=2,
             label='Theoretical: Uniform'
         )
     
     ax.set_xlabel('Logical Value')
-    ax.set_ylabel('Probability Density')
-    ax.axvline(x=0, color='red', linestyle='--', label='Boundary')
+    ax.set_ylabel('Count')
+    ax.axvline(x=0, color='red', linestyle='--')
     ax.legend()
     ax.grid(True, alpha=0.3)
 

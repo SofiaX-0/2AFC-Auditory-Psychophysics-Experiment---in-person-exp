@@ -23,15 +23,15 @@ def block_size(group):
 
     B. return the block size arrangement, ready to be written into the main csv doc. 
     '''
-    target_sum = 30 # total trial number
+    target_sum = 600 # total trial number
     max_attempts = 1000 # attempts to find series
 
     if group == 0: # short-block group
-        N = 10 # N: number of blocks
-        b_min, b_max = 1, 4
+        N = 11 # N: number of blocks
+        b_min, b_max = 40, 60
     else:
-        N = 3
-        b_min, b_max = 6, 12
+        N = 4
+        b_min, b_max = 130, 210
     
     # Try to generate series that satisfy constraints
     for attempt in range(max_attempts):
