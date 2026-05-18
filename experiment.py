@@ -40,8 +40,6 @@ from psychopy import core, event, visual, logging, prefs, gui, sound
 import os
 from datetime import datetime
 from random import randint
-from pycaw.pycaw import AudioUtilities
-from ctypes import cast, POINTER
 
 from stimulus_generator import sample_in_block
 from group_assignment import group_assign
@@ -57,13 +55,6 @@ prefs.hardware['audioLatencyMode'] = 0
 def clear_output():
     os.system('cls' if os.name == 'nt' else 'clear') # cls on Windows; others: clear 
     print("Debug: clear screen")
-
-# get current system volume 
-speakers = AudioUtilities.GetSpeakers()
-volume_interface = speakers.EndpointVolume
-
-def get_system_volume():
-    return volume_interface.GetMasterVolumeLevelScalar()
 
 def experiment_update():
     '''
@@ -292,10 +283,7 @@ def experiment_update():
                          color= (1,1,1), fullscr=True, # white
                          winType='pyglet',
                          allowGUI=False,
-                         waitBlanking=True) 
-    # get sysyem volume before experiment start
-    initial_system_volume = get_system_volume()
-    print(f"DEBUG: Initial system volume = {initial_system_volume:.3f}")
+                         waitBlanking=True)
 
     win0.mouseVisible = False
     ## fixation text
@@ -336,14 +324,7 @@ def experiment_update():
                             height=40, wrapWidth=1400, alignText='left', anchorHoriz='center', anchorVert='center')
     text_stim.setText(Instruction)
     text_stim.wrapWidth = 1600
-    warning_text = visual.TextStim(
-    win0,
-    text="WARNING!\n\nSystem volume changed!\n\nPlease restore the original volume.",
-    font='Arial',
-    color=(-1, -1, -1),
-    units='pix',
-    height=30
-    )
+
     event.clearEvents()
     text_stim.draw()
     win0.flip()
@@ -424,18 +405,6 @@ def experiment_update():
 
 
         for trial_no in range(1, curr_block_arr[block_no-1] + 1):
-            # compare system volume with the initial volume at the beginning pg every trial 
-            current_system_volume = get_system_volume()
-            if abs(current_system_volume - initial_system_volume) > 0.02:
-                current_system_volume = get_system_volume()
-
-            while abs(current_system_volume - initial_system_volume) > 0.02:
-                warning_text.draw()
-                win0.flip()
-                core.wait(0.1)
-                current_system_volume = get_system_volume()
-                event.clearEvents()
-
             event.clearEvents()
             ### update file info
             updated_exp_time = datetime.today().strftime('%H%M%S')
