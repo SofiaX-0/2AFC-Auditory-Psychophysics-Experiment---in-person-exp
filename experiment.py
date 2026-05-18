@@ -76,7 +76,6 @@ def experiment_update():
     response_limit = 4
     fixation_duration = 0.35
     feedback = 0.35
-    system_volume = 50
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
     os.makedirs(RESULT_PATH, exist_ok=True) # create results folder if not exists
