@@ -40,9 +40,13 @@ from psychopy import core, event, visual, logging, prefs, gui, sound
 import os
 from datetime import datetime
 from random import randint
+from pycaw.pycaw import AudioUtilities
+from ctypes import cast, POINTER
+
 from stimulus_generator import sample_in_block
 from group_assignment import group_assign
 from block_size import block_size
+
 
 logging.console.setLevel(logging.CRITICAL)
 prefs.hardware['audioLib'] = ['sounddevice', 'ptb', 'pyo']
@@ -53,6 +57,13 @@ prefs.hardware['audioLatencyMode'] = 0
 def clear_output():
     os.system('cls' if os.name == 'nt' else 'clear') # cls on Windows; others: clear 
     print("Debug: clear screen")
+
+# get current system volume 
+speakers = AudioUtilities.GetSpeakers()
+volume_interface = speakers.EndpointVolume
+
+def get_system_volume():
+    return volume_interface.GetMasterVolumeLevelScalar()
 
 def experiment_update():
     '''
@@ -65,6 +76,7 @@ def experiment_update():
     response_limit = 4
     fixation_duration = 0.35
     feedback = 0.35
+    system_volume = 50
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
     os.makedirs(RESULT_PATH, exist_ok=True) # create results folder if not exists
@@ -101,6 +113,9 @@ def experiment_update():
                            sampleRate=sample_rate)
         return sound_obj
     
+    ### create a sound object
+    base_noise = generate_white_noise(duration=0.3, sample_rate=44100, amplitude=1.0)
+    probe = base_noise
     
     ## feedback images
     img_correct_path = os.path.join(SCRIPT_DIR, "images","correct.png")
@@ -130,7 +145,7 @@ def experiment_update():
     curr_trial_sess = 0 # current trial no. in the whole session
     corr_counter_block = 0
     corr_counter_session = 0
-    
+
     ## ===================================================================
     ## INFO PAGE ---------------------------------------------------------
     ## => need to read & store information of subjects:
@@ -279,12 +294,57 @@ def experiment_update():
                          winType='pyglet',
                          allowGUI=False,
                          waitBlanking=True) 
-    win0.mouseVisible = False 
-    text_stim = visual.TextStim(win0, font='Arial', color=(-1, -1, -1), units='pix',
-                                height=40, wrapWidth=1400, alignText='left', anchorHoriz='center', anchorVert='center')
+    # get sysyem volume before experiment start
+    initial_system_volume = get_system_volume()
+    print(f"DEBUG: Initial system volume = {initial_system_volume:.3f}")
+
+    win0.mouseVisible = False
+    ## fixation text
+    ### Fixation
+    fixation = visual.ShapeStim(win0, 
+            vertices=((0, -30), (0, 30), (0, 0), (-30, 0), (30, 0)),
+            lineWidth=5,
+            closeShape=False,
+            lineColor='black',
+            units='pix'
+            )
+    
+    ## countdown object
+    # countdown bar
+    bar_width = 1000
+    bar_height = 20
+    bar_y_pos = 350
+    countdown_bg = visual.Rect(win0, width=bar_width, height=bar_height, 
+                           pos=(0, bar_y_pos), fillColor='grey', 
+                           lineColor='black', units='pix')
+    countdown_bar = visual.Rect(win0, width=bar_width, height=bar_height, 
+                            pos=(0, bar_y_pos), fillColor='blue', 
+                            lineColor='blue', units='pix')
+            
+    text_stim_resp = visual.TextStim(win0, text=response_text,
+                            pos=(0, 200), height=45, color=(-1, -1, -1), units='pix', wrapWidth=1600,
+                            alignText='center')
+    text_stim_A = visual.TextStim(win0, text=choice_A,
+                            pos=(-400, -150), height=50, color=(-1, -1, -1), units='pix', wrapWidth=1600,
+                            alignText='center')
+    text_stim_B = visual.TextStim(win0, text=choice_B,
+                            pos=(400, -150), height=50, color=(-1, -1, -1), units='pix', wrapWidth=1600,
+                            alignText='center')
+    ## feedback object
+    msg_feedback = visual.TextStim(win0, text='Feedback', pos=(0, 150), height=30, units='pix')
+    ## instruction text
+    text_stim = visual.TextStim(win0, color=(-1, -1, -1), units='pix',
+                            height=40, wrapWidth=1400, alignText='left', anchorHoriz='center', anchorVert='center')
     text_stim.setText(Instruction)
     text_stim.wrapWidth = 1600
-  
+    warning_text = visual.TextStim(
+    win0,
+    text="WARNING!\n\nSystem volume changed!\n\nPlease restore the original volume.",
+    font='Arial',
+    color=(-1, -1, -1),
+    units='pix',
+    height=30
+    )
     event.clearEvents()
     text_stim.draw()
     win0.flip()
@@ -330,7 +390,6 @@ def experiment_update():
     
     finish = False
     last_trial = False
-
     # side rule
     if part_no % 2 == 0:
         side_rule = 0 # A for lower amp correct
@@ -366,20 +425,25 @@ def experiment_update():
 
 
         for trial_no in range(1, curr_block_arr[block_no-1] + 1):
+            # compare system volume with the initial volume at the beginning pg every trial 
+            current_system_volume = get_system_volume()
+            if abs(current_system_volume - initial_system_volume) > 0.02:
+                current_system_volume = get_system_volume()
+
+            while abs(current_system_volume - initial_system_volume) > 0.02:
+                warning_text.draw()
+                win0.flip()
+                core.wait(0.1)
+                current_system_volume = get_system_volume()
+                event.clearEvents()
+
             event.clearEvents()
             ### update file info
             updated_exp_time = datetime.today().strftime('%H%M%S')
             updated_blk_trial = trial_no # current trial in block
             curr_trial_sess += 1
             
-            ### Fixation
-            fixation = visual.ShapeStim(win0, 
-                    vertices=((0, -30), (0, 30), (0, 0), (-30, 0), (30, 0)),
-                    lineWidth=5,
-                    closeShape=False,
-                    lineColor='black',
-                    units='pix'
-                    )
+            ### fixation
             fixation.draw()
             win0.flip()
             core.wait(fixation_duration)
@@ -400,39 +464,12 @@ def experiment_update():
             updated_logical_value = logical_values.iloc[trial_no-1]
             distance = distances.iloc[trial_no-1]
             true_cat = corr_sides.iloc[trial_no-1]
-            ### create a sound object
-            base_noise = generate_white_noise(duration=0.3, 
-                                        sample_rate=44100, 
-                                        amplitude=1.0)
-            
-            probe = base_noise
-
+            # play
             probe.setVolume(playback_volume)
             probe.play()
             core.wait(probe.getDuration())
 
             ### Respond
-            # countdown bar
-            bar_width = 1000
-            bar_height = 20
-            bar_y_pos = 350
-            countdown_bg = visual.Rect(win0, width=bar_width, height=bar_height, 
-                           pos=(0, bar_y_pos), fillColor='grey', 
-                           lineColor='black', units='pix')
-            countdown_bar = visual.Rect(win0, width=bar_width, height=bar_height, 
-                            pos=(0, bar_y_pos), fillColor='blue', 
-                            lineColor='blue', units='pix')
-            
-            text_stim_resp = visual.TextStim(win0, text=response_text, font='Arial', 
-                                 pos=(0, 200), height=45, color=(-1, -1, -1), units='pix', wrapWidth=1600,
-                                 alignText='center')
-            text_stim_A = visual.TextStim(win0, text=choice_A, font='Arial', 
-                              pos=(-400, -150), height=50, color=(-1, -1, -1), units='pix', wrapWidth=1600,
-                              alignText='center')
-            text_stim_B = visual.TextStim(win0, text=choice_B, font='Arial', 
-                              pos=(400, -150), height=50, color=(-1, -1, -1), units='pix', wrapWidth=1600,
-                              alignText='center')
-
             resp_clock = core.Clock()
             event.clearEvents()
             updated_sub_response = -1
@@ -543,7 +580,6 @@ def experiment_update():
                              'TRIAL_SSE':[curr_trial_sess]
                             })
             ### Feedback
-            msg_feedback = visual.TextStim(win0, text='Feedback', pos=(0, 150), height=30, units='pix')
             msg_feedback.draw()
             if updated_feed == 0:
                 img_to_draw = img_incorrect
