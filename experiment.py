@@ -40,6 +40,7 @@ from psychopy import core, event, visual, logging, prefs, gui, sound
 import os
 from datetime import datetime
 from random import randint
+from calibration import SimpleCalibration
 
 from stimulus_generator import sample_in_block
 from group_assignment import group_assign
@@ -49,6 +50,13 @@ from block_size import block_size
 logging.console.setLevel(logging.CRITICAL)
 prefs.hardware['audioLib'] = ['sounddevice', 'ptb', 'pyo']
 prefs.hardware['audioLatencyMode'] = 0
+calibration = SimpleCalibration()
+## get fit parameters from calibration
+with open("calibration_fit.txt", "r") as f:
+    lines = f.readlines()
+
+calibration.fit_a = float(lines[0])
+calibration.fit_b = float(lines[1])
 
 
 # clear command prompt 
@@ -77,35 +85,6 @@ def experiment_update():
     else:
         df_master = pd.DataFrame(columns=['id', 'group', 'age', 'gender','session_comp'])
         df_master.to_csv(FILENAME_INFO, index=False)
-
-    ## generate base stimuli
-    def generate_white_noise(duration=0.3, sample_rate=44100, amplitude=1.0):
-        '''
-        Generate white noise (no fade in / fade out):
-        Parameters:
-        duration : float (default = 0.3s)
-        sample_rate : int (default = 44100Hz)
-        amplitude (0-1) : float (default = 1.0)
-
-        Returns:
-        psychopy.sound.Sound
-        
-        '''
-        n_samples = int(duration * sample_rate)
-        white_noise = np.random.normal(0, 1, n_samples)
-        max_val = np.max(np.abs(white_noise))
-        if max_val > 0:
-            white_noise = white_noise / max_val
-        white_noise = white_noise * amplitude
-        white_noise = white_noise.astype(np.float32)
-        sound_obj = sound.Sound(value=white_noise, 
-                           stereo=True, 
-                           sampleRate=sample_rate)
-        return sound_obj
-    
-    ### create a sound object
-    base_noise = generate_white_noise(duration=0.3, sample_rate=44100, amplitude=1.0)
-    probe = base_noise
     
     ## feedback images
     img_correct_path = os.path.join(SCRIPT_DIR, "images","correct.png")
@@ -403,7 +382,6 @@ def experiment_update():
         distances = df_block_sample['Distance_toB_in_dba']
         boundary = df_block_sample['Physical_Boundary'].iloc[0]
 
-
         for trial_no in range(1, curr_block_arr[block_no-1] + 1):
             event.clearEvents()
             ### update file info
@@ -424,16 +402,13 @@ def experiment_update():
             win0.flip()
             #### set stimulus amplitude
             updated_amp = amplitudes.iloc[trial_no-1]
-            # temporary linear mapping from dBA to PsychoPy volume!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            playback_volume = ((updated_amp - 45)/(75 - 45))
-
-            playback_volume = np.clip(playback_volume, 0.0, 1.0)
-
+            playback_volume = calibration.dba_to_amplitude(updated_amp)
+            playback_volume = np.clip(playback_volume, 0.0, 1.0) # ensure it stays valid
             updated_logical_value = logical_values.iloc[trial_no-1]
             distance = distances.iloc[trial_no-1]
             true_cat = corr_sides.iloc[trial_no-1]
             # play
-            probe.setVolume(playback_volume)
+            probe = calibration.generate_white_noise(playback_volume, duration=0.3) # use the same noise in calibration
             probe.play()
             core.wait(probe.getDuration())
 
