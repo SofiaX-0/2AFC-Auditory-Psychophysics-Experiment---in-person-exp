@@ -141,7 +141,6 @@ class SimpleCalibration:
         ax.grid(True, alpha=0.3)
         plot_file = self.calibration_file.replace('.csv', '_plot.png')
         fig.savefig(plot_file, dpi=300)
-        plt.show()
         print(f"Plot saved: {plot_file}")
         print(f"dBA = {a:.4f} * ln(amplitude) + {b:.4f}")
         print(f"Amplitude = exp((dBA - {b:.4f}) / {a:.4f})")
@@ -149,6 +148,9 @@ class SimpleCalibration:
         with open("calibration_fit.txt", "w") as f: # save parameters to txt
             f.write(f"{self.fit_a}\n")
             f.write(f"{self.fit_b}\n")
+            print("Calibration parameters saved.")
+
+        plt.show()
     
     def dba_to_amplitude(self, target_dba):
         return np.exp((target_dba - self.fit_b) / self.fit_a)
