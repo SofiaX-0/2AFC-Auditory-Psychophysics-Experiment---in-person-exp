@@ -36,7 +36,7 @@ Number of subject groups: 2
 
 import pandas as pd
 import numpy as np
-from psychopy import core, event, visual, logging, prefs, gui, sound
+from psychopy import core, event, visual, logging, prefs, gui
 import os
 from datetime import datetime
 from random import randint
@@ -100,6 +100,12 @@ def experiment_update():
     f"You have {response_limit} seconds to respond. "
     f"If no response is made, it will be marked as incorrect.\n\n"
     f"Note: the reward is only granted upon completion of all {TOTAL_SESSION} sessions.\n\n"
+    f"You may pause the experiment by pressing 'ESC'.\n"
+    f"During a break, you must type 'resume' within 4 minutes "
+    f"to continue the experiment.\n"
+    f"If you do not return within 4 minutes, "
+    f"the session will terminate automatically.\n"
+    f"You may take at most 2 breaks during the experiment.\n\n"
     f"Press SPACE to start."
     )
     
@@ -114,6 +120,74 @@ def experiment_update():
     curr_trial_sess = 0 # current trial no. in the whole session
     corr_counter_block = 0
     corr_counter_session = 0
+
+    # =========================
+    # break settings
+    # =========================
+    break_count = 0
+    MAX_BREAK = 2
+    BREAK_LIMIT = 20  # 4 minutes ################################### DEBUG
+
+    # ============================================================
+    # BREAK FUNCTION
+    # ============================================================
+
+    def run_break():
+
+        break_clock = core.Clock()
+        typed_resume = ""
+
+        while break_clock.getTime() < BREAK_LIMIT:
+
+            remaining = int(BREAK_LIMIT - break_clock.getTime())
+
+            mins = remaining // 60
+            secs = remaining % 60
+
+            # REUSE EXISTING TEXTSTIM
+            text_stim.setText(
+                f"Experiment Paused\n\n"
+                f"Remaining Time: {mins:02d}:{secs:02d}\n\n"
+                f"Breaks used: {break_count}/{MAX_BREAK}\n\n"
+                f'Type "resume" to continue.\n\n'
+                f"The current trial will restart."
+            )
+
+            text_stim.setHeight(40)
+            text_stim.alignText = 'center'
+            text_stim.pos = (0, 0)
+
+            text_stim.draw()
+            win0.flip()
+
+            keys = event.getKeys()
+
+            for key in keys:
+
+                if key == 'q':
+
+                    win0.close()
+                    core.quit()
+
+                elif key == 'backspace':
+
+                    typed_resume = typed_resume[:-1]
+
+                elif len(key) == 1:
+
+                    typed_resume += key.lower()
+
+                    if len(typed_resume) > 20:
+                        typed_resume = typed_resume[-20:]
+
+                    if typed_resume.lower().endswith("resume"):
+
+                        event.clearEvents()
+                        return True
+
+            core.wait(0.2)
+
+        return False
 
     ## ===================================================================
     ## INFO PAGE ---------------------------------------------------------
@@ -265,6 +339,7 @@ def experiment_update():
                          waitBlanking=True)
 
     win0.mouseVisible = False
+
     ## fixation text
     ### Fixation
     fixation = visual.ShapeStim(win0, 
@@ -388,198 +463,333 @@ def experiment_update():
             updated_exp_time = datetime.today().strftime('%H%M%S')
             updated_blk_trial = trial_no # current trial in block
             curr_trial_sess += 1
+
+            trial_finished = False
+            while not trial_finished:
             
-            ### fixation
-            fixation.draw()
-            win0.flip()
-            core.wait(fixation_duration)
+                ### fixation
+                fixation.draw()
+                win0.flip()
+                core.wait(fixation_duration)
 
-            ### Listen
-            text_stim.setText('Listen')
-            text_stim.setHeight(72)
-            text_stim.alignText = 'center'
-            text_stim.draw()
-            win0.flip()
-            #### set stimulus amplitude
-            updated_amp = amplitudes.iloc[trial_no-1]
-            playback_volume = calibration.dba_to_amplitude(updated_amp)
-            playback_volume = np.clip(playback_volume, 0.0, 1.0) # ensure it stays valid
-            updated_logical_value = logical_values.iloc[trial_no-1]
-            distance = distances.iloc[trial_no-1]
-            true_cat = corr_sides.iloc[trial_no-1]
-            # play
-            probe = calibration.generate_white_noise(playback_volume, duration=0.3) # use the same noise in calibration
-            probe.play()
-            core.wait(probe.getDuration())
+                ### Listen
+                text_stim.setText('Listen')
+                text_stim.setHeight(72)
+                text_stim.alignText = 'center'
+                text_stim.draw()
+                win0.flip()
+                #### set stimulus amplitude
+                updated_amp = amplitudes.iloc[trial_no-1]
+                playback_volume = calibration.dba_to_amplitude(updated_amp)
+                playback_volume = np.clip(playback_volume, 0.0, 1.0) # ensure it stays valid
+                updated_logical_value = logical_values.iloc[trial_no-1]
+                distance = distances.iloc[trial_no-1]
+                true_cat = corr_sides.iloc[trial_no-1]
+                # play
+                probe = calibration.generate_white_noise(playback_volume, duration=0.3) # use the same noise in calibration
+                probe.play()
+                sound_clock = core.Clock()
+                paused = False
+                while sound_clock.getTime() < probe.getDuration():
 
-            ### Respond
-            resp_clock = core.Clock()
-            event.clearEvents()
-            updated_sub_response = -1
-            updated_feed = 0
-            rt = -1
-            while resp_clock.getTime() < response_limit:
-                time_left = response_limit - resp_clock.getTime()
-                ratio = max(0, time_left / response_limit)
-                new_width = bar_width * ratio
-                countdown_bar.width = new_width
-                countdown_bar.pos = (-(bar_width - new_width) / 2, bar_y_pos)
-                countdown_bg.draw()
-                countdown_bar.draw()
+                        keys = event.getKeys()
 
-                text_stim_resp.draw()
-                text_stim_A.draw()
-                text_stim_B.draw()
+                        if 'escape' in keys:
+                            probe.stop()
+
+                            if break_count >= MAX_BREAK:
+                                break
+
+                            break_count += 1
+
+                            continue_exp = run_break()
+                            event.clearEvents()
+
+                            if continue_exp:
+
+                                paused = True
+                                event.clearEvents()
+                                break
+
+                            else:
+
+                                text_stim.setText(
+                                    "Session terminated.\n\n"
+                                    "The session will not be counted as completed."
+                                )
+
+                                text_stim.setHeight(50)
+                                text_stim.alignText = 'center'
+                                text_stim.pos = (0, 0)
+
+                                text_stim.draw()
+                                win0.flip()
+
+                                core.wait(5)
+
+                                win0.close()
+                                core.quit()
+
+                        core.wait(0.01)
+
+                if paused:
+
+                    continue
+
+                ### Respond
+                resp_clock = core.Clock()
+                event.clearEvents()
+                updated_sub_response = -1
+                updated_feed = 0
+                rt = -1
+                responded = False
+                while resp_clock.getTime() < response_limit:
+                    time_left = response_limit - resp_clock.getTime()
+                    ratio = max(0, time_left / response_limit)
+                    new_width = bar_width * ratio
+                    countdown_bar.width = new_width
+                    countdown_bar.pos = (-(bar_width - new_width) / 2, bar_y_pos)
+                    countdown_bg.draw()
+                    countdown_bar.draw()
+
+                    text_stim_resp.draw()
+                    text_stim_A.draw()
+                    text_stim_B.draw()
+                    win0.flip()
+
+                    keys = event.getKeys(timeStamped=resp_clock)
+                    if keys:
+                        for key_name, key_time in keys:
+                            # ====================================
+                            # BREAK
+                            # ====================================
+
+                            if key_name == 'escape':
+
+                                if break_count >= MAX_BREAK:
+                                    break
+
+                                break_count += 1
+
+                                continue_exp = run_break()
+
+                                event.clearEvents()
+
+                                if continue_exp:
+
+                                    paused = True
+                                    event.clearEvents()
+                                    break
+
+                                else:
+
+                                    text_stim.setText(
+                                        "Session terminated.\n\n"
+                                        "The session will not be counted as completed."
+                                    )
+
+                                    text_stim.setHeight(50)
+                                    text_stim.alignText = 'center'
+                                    text_stim.pos = (0, 0)
+
+                                    text_stim.draw()
+                                    win0.flip()
+
+                                    core.wait(5)
+
+                                    win0.close()
+                                    core.quit()
+
+                            # ====================================
+                            # response handling
+                            # ====================================
+
+                            if key_name not in ['left', 'right', 'q']:
+                                continue
+
+                            rt = key_time
+                            trial_resp += 1
+                            trial_resp_blk += 1
+
+                            if key_name == 'left':
+
+                                updated_sub_response = 0
+
+                                if true_cat == 0: # low intensity
+
+                                    if side_rule == 0: # low left; high right
+
+                                        print('DEBUG: Subject Correct.')
+                                        updated_feed = 1
+                                        corr_counter_block += 1
+                                        corr_counter_session += 1
+
+                                    else: # low right, high left
+
+                                        print('DEBUG: Subject Incorrect.')
+                                        updated_feed = 0
+
+                                elif true_cat == 1: # high intensity
+
+                                    if side_rule == 0: # low left; high right
+
+                                        print('DEBUG: Subject Incorrect.')
+                                        updated_feed = 0
+
+                                    else: # low right, high left
+
+                                        print('DEBUG: Subject Correct.')
+                                        updated_feed = 1
+                                        corr_counter_block += 1
+                                        corr_counter_session += 1
+
+                                print('Debug: Trial Number: %d' %(trial_no))
+                                print('Debug: A chosen.')
+
+                                responded = True
+
+                                break
+
+                            elif key_name == 'right':
+
+                                updated_sub_response = 1 # pressed right key
+
+                                if true_cat == 0: # low intensity
+
+                                    if side_rule == 0:
+
+                                        print('DEBUG: Subject Incorrect.')
+                                        updated_feed = 0
+
+                                    else:
+
+                                        updated_feed = 1
+                                        corr_counter_block += 1
+                                        corr_counter_session += 1
+
+                                        print('DEBUG: Subject Correct.')
+
+                                elif true_cat == 1: # hight intensity
+
+                                    if side_rule == 0:
+
+                                        updated_feed = 1
+                                        corr_counter_block += 1
+                                        corr_counter_session += 1
+
+                                        print('DEBUG: Subject Correct.')
+
+                                    else:
+
+                                        print('DEBUG: Subject Incorrect.')
+                                        updated_feed = 0
+
+                                print('DEBUG: Trial Number: %d' %(trial_no))
+                                print('DEBUG: B chosen.')
+
+                                responded = True
+
+                                break
+
+                            elif key_name == 'q':
+                                win0.close()
+                                core.quit()
+                                break
+                        if paused or responded:
+                            break
+                if rt == -1:
+                    if paused:
+                        continue
+                    updated_feed = 0
+                    print(f"DEBUG: Trial {trial_no} - Timed Out! Auto-switching to feedback.")
+
+                win0.flip()
+                event.clearEvents()
+
+
+                updated_output = pd.DataFrame({'ID':[subj_id],
+                                'GROUP': [part_group],
+                                'SIDE_RULE': [side_rule],
+                                'SESSION': [curr_sess],
+                                'DATE':[updated_exp_date],
+                                'TIME':[updated_exp_time],
+                                'TRIAL_BLK':[updated_blk_trial], 
+                                'BLK_NO': [updated_block_no], 
+                                'DISTRIBUTION': [updated_dist],
+                                'AMP':[updated_amp],
+                                'LOGICAL_AMP':[updated_logical_value],
+                                'PHY_BOUND': [boundary],
+                                'DISTANCE':[distance],
+                                'TRUE_CAT': [true_cat],
+                                'SUB RESPONSE':[updated_sub_response],
+                                'FEEDBACK': [updated_feed],
+                                'RT': [rt],
+                                'CORRECT_B':[corr_counter_block],
+                                'CORRECT_S':[corr_counter_session],
+                                'TOTAL_BLK': [curr_total_block],
+                                'TOTAL_TRIAL_INBLK': [curr_block_arr[block_no-1]],
+                                'TRIAL_SSE':[curr_trial_sess]
+                                })
+
+                ### Feedback
+                msg_feedback.draw()
+                if updated_feed == 0:
+                    img_to_draw = img_incorrect
+                else:
+                    img_to_draw = img_correct
+                img_to_draw.draw()
                 win0.flip()
 
-                keys = event.getKeys(keyList=['left', 'right', 'q'], timeStamped=resp_clock)
-                if keys:
-                    key_name, key_time = keys[0]
-                    rt = key_time
-                    trial_resp += 1
-                    trial_resp_blk += 1
+                core.wait(feedback)
+                ### Save record
+                file_name = f"{subj_id}_{part_group}.csv"
+                pull_file = os.path.join(RESULT_PATH, file_name)
+                if curr_sess == 1 and trial_no == 1 and block_no == 1:
+                    if os.path.exists(pull_file):
+                        print(f'DEBUG: File {pull_file} already exists! Skipping creation.')
+                    else:
+                        print('DEBUG: Continue saving the first record.')
+                        create_exp_file(subj_id,part_group,updated_output)
+                elif trial_no == 1 and block_no == 1:
+                    p_columns = ['pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
+                                'pSUB RESPONSE','pFEEDBACK','pRT']
+                    for col in p_columns:
+                        updated_output[col] = "---"
+                    
+                    columns = ['ID','GROUP','SIDE_RULE','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                        'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
+                        'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
+                        'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
+                        'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
+                        'TOTAL_TRIAL_INBLK','TRIAL_SSE']
+                    final_output = updated_output[columns]
 
-                    if key_name == 'left':
-                        updated_sub_response = 0
-                        if true_cat == 0: # lower amp
-                            if side_rule == 0: # lower amp on the left
-                                print('DEBUG: Subject Correct.')
-                                updated_feed = 1
-                                corr_counter_block += 1
-                                corr_counter_session += 1
-                            else: # lower amp on the right
-                                print('DEBUG: Subject Incorrect.')
-                                updated_feed = 0
-                        elif true_cat == 1: # higher amp
-                            if side_rule == 0:
-                                print('DEBUG: Subject Incorrect.')
-                                updated_feed = 0
-                            else: # lower amp on the right
-                                print('DEBUG: Subject Correct.')
-                                updated_feed = 1
-                                corr_counter_block += 1
-                                corr_counter_session += 1
-            
-                        print('Debug: Trial Number: %d' %(trial_no))
-                        print('Debug: A chosen.')
+                    final_output.to_csv(pull_file, mode='a', header=False, index=False, encoding='utf-8-sig')
+                    print(f"DEBUG: Session {curr_sess} started. P-columns initialized with '---'.")
+                    
+                else: # do not need to create a new file
+                    old_df = pd.read_csv(pull_file)
+                    last_trial = old_df.iloc[-1]
+                    updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
+                    updated_output['pAMP']          = last_trial['AMP']
+                    updated_output['pLOGICAL_AMP']  = last_trial['LOGICAL_AMP']
+                    updated_output['pphyBOUND']        = last_trial['PHY_BOUND']
+                    updated_output['pDISTANCE']     = last_trial['DISTANCE']
+                    updated_output['pTRUE_CAT']     = last_trial['TRUE_CAT']
+                    updated_output['pSUB RESPONSE'] = last_trial['SUB RESPONSE']
+                    updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
+                    updated_output['pRT']           = last_trial['RT']
 
-                    elif key_name == 'right':
-                        updated_sub_response = 1
-                        if true_cat == 0: # lower amp
-                            if side_rule == 0: # lower amp on the left
-                                print('DEBUG: Subject Incorrect.')
-                                updated_feed = 0
-                            else: # lower amp on the right
-                                updated_feed = 1
-                                corr_counter_block += 1
-                                corr_counter_session += 1
-                                print('DEBUG: Subject Correct.')
-                        elif true_cat == 1: # higher amp
-                            if side_rule == 0: # lower amp on the left
-                                updated_feed = 1
-                                corr_counter_block += 1
-                                corr_counter_session += 1
-                                print('DEBUG: Subject Correct.')
-                            else: # lower amp on the right
-                                print('DEBUG: Subject Incorrect.')
-                                updated_feed = 0
+                    columns = ['ID','GROUP','SIDE_RULE','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                        'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
+                        'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
+                        'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
+                        'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
+                        'TOTAL_TRIAL_INBLK','TRIAL_SSE']
+                    updated_output = updated_output[columns]
 
-                        print('DEBUG: Trial Number: %d' %(trial_no))
-                        print('DEBUG: B chosen.')
-                    elif key_name == 'q':
-                        win0.close()
-                        core.quit()
-                    break
-            
-            if rt == -1:
-                updated_feed = 0
-                print(f"DEBUG: Trial {trial_no} - Timed Out! Auto-switching to feedback.")
-
-            win0.flip()
-            event.clearEvents()
-
-
-            updated_output = pd.DataFrame({'ID':[subj_id],
-                             'GROUP': [part_group],
-                             'SIDE_RULE': [side_rule],
-                             'SESSION': [curr_sess],
-                             'DATE':[updated_exp_date],
-                             'TIME':[updated_exp_time],
-                             'TRIAL_BLK':[updated_blk_trial], 
-                             'BLK_NO': [updated_block_no], 
-                             'DISTRIBUTION': [updated_dist],
-                             'AMP':[updated_amp],
-                             'LOGICAL_AMP':[updated_logical_value],
-                             'PHY_BOUND': [boundary],
-                             'DISTANCE':[distance],
-                             'TRUE_CAT': [true_cat],
-                             'SUB RESPONSE':[updated_sub_response],
-                             'FEEDBACK': [updated_feed],
-                             'RT': [rt],
-                             'CORRECT_B':[corr_counter_block],
-                             'CORRECT_S':[corr_counter_session],
-                             'TOTAL_BLK': [curr_total_block],
-                             'TOTAL_TRIAL_INBLK': [curr_block_arr[block_no-1]],
-                             'TRIAL_SSE':[curr_trial_sess]
-                            })
-            ### Feedback
-            msg_feedback.draw()
-            if updated_feed == 0:
-                img_to_draw = img_incorrect
-            else:
-                img_to_draw = img_correct
-            img_to_draw.draw()
-            win0.flip()
-
-            core.wait(feedback)
-            ### Save record
-            file_name = f"{subj_id}_{part_group}.csv"
-            pull_file = os.path.join(RESULT_PATH, file_name)
-            if curr_sess == 1 and trial_no == 1 and block_no == 1:
-                if os.path.exists(pull_file):
-                    print(f'DEBUG: File {pull_file} already exists! Skipping creation.')
-                else:
-                    print('DEBUG: Continue saving the first record.')
-                    create_exp_file(subj_id,part_group,updated_output)
-            elif trial_no == 1 and block_no == 1:
-                p_columns = ['pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
-                            'pSUB RESPONSE','pFEEDBACK','pRT']
-                for col in p_columns:
-                    updated_output[col] = "---"
-                
-                columns = ['ID','GROUP','SIDE_RULE','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
-                    'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
-                    'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
-                    'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
-                    'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
-                    'TOTAL_TRIAL_INBLK','TRIAL_SSE']
-                final_output = updated_output[columns]
-
-                final_output.to_csv(pull_file, mode='a', header=False, index=False, encoding='utf-8-sig')
-                print(f"DEBUG: Session {curr_sess} started. P-columns initialized with '---'.")
-                
-            else: # do not need to create a new file
-                old_df = pd.read_csv(pull_file)
-                last_trial = old_df.iloc[-1]
-                updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
-                updated_output['pAMP']          = last_trial['AMP']
-                updated_output['pLOGICAL_AMP']  = last_trial['LOGICAL_AMP']
-                updated_output['pphyBOUND']        = last_trial['PHY_BOUND']
-                updated_output['pDISTANCE']     = last_trial['DISTANCE']
-                updated_output['pTRUE_CAT']     = last_trial['TRUE_CAT']
-                updated_output['pSUB RESPONSE'] = last_trial['SUB RESPONSE']
-                updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
-                updated_output['pRT']           = last_trial['RT']
-
-                columns = ['ID','GROUP','SIDE_RULE','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
-                    'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
-                    'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
-                    'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
-                    'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
-                    'TOTAL_TRIAL_INBLK','TRIAL_SSE']
-                updated_output = updated_output[columns]
-
-                updated_output.to_csv(pull_file, mode='a', header=False, index=False)
+                    updated_output.to_csv(pull_file, mode='a', header=False, index=False)
+                trial_finished = True
         
         if trial_no == curr_block_arr[block_no-1]:
             last_trial= True

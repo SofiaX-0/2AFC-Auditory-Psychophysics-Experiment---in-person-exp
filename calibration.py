@@ -43,7 +43,7 @@ class SimpleCalibration:
         dB = float(input(f"Enter dB(A): ")) # ask the user to enter the dB(A)
         return dB # return the dB(A)
     
-    def run(self, amplitudes=None, n_repeats=5): # measure 5 times
+    def run(self, amplitudes=None, n_repeats=5):
         """Run repeated calibration sessions."""
 
         if amplitudes is None:
