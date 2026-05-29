@@ -36,11 +36,20 @@ Number of subject groups: 2
 
 import pandas as pd
 import numpy as np
-from psychopy import core, event, visual, logging, prefs, gui
+from psychopy import prefs
+import sounddevice as sd
+prefs.hardware['audioLib'] = ['ptb']
+prefs.hardware['audioLatencyMode'] = 0
+prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)'
+# print('sound device:', sd.default.device)
+# for i, dev in enumerate(sd.query_devices()):
+#     print (i, dev['name'])
 import os
 from datetime import datetime
 from random import randint
 from calibration import SimpleCalibration
+from psychopy import core, event, visual, logging, gui
+
 
 from stimulus_generator import sample_in_block
 from group_assignment import group_assign
@@ -48,8 +57,6 @@ from block_size import block_size
 
 
 logging.console.setLevel(logging.CRITICAL)
-prefs.hardware['audioLib'] = ['sounddevice', 'ptb', 'pyo']
-prefs.hardware['audioLatencyMode'] = 0
 calibration = SimpleCalibration()
 ## get fit parameters from calibration
 with open("calibration_fit.txt", "r") as f:
@@ -126,7 +133,7 @@ def experiment_update():
     # =========================
     break_count = 0
     MAX_BREAK = 2
-    BREAK_LIMIT = 20  # 4 minutes ################################### DEBUG
+    BREAK_LIMIT = 240  # 4 minutes ################################### DEBUG
 
     # ============================================================
     # BREAK FUNCTION
