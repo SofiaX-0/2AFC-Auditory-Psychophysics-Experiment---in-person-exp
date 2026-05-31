@@ -7,6 +7,8 @@ venv/
 data/
 *.csv
 
+*.m
+
 results/
 
 

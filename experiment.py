@@ -1,13 +1,16 @@
+###############################################################################
+# This is the main file for the experiment. 
+###############################################################################
+
 '''
 2AFC Auditory Psychophysics Experiment
 ==================================================================================
-Sound stimulus template - 300ms,10ms fade in and out @ 400Hz, sampleRate = 44100Hz, 
-generated with Audacity
+Sound stimulus template - 300ms,10ms @ 400Hz, sampleRate = 44100Hz
 
-Sound amplitude: sampled from 2 distributions based on: 
+Sound amplitude: sampled from 2 distributions (hard-A and hard-B) based on: 
 
 Menichini, E., Pajot-Moric, Q., Low, R., Pedrosa, V., Pourdehghan, A., 
-Vincent, P., Zhou, L., Teachen, L., & Akrami, A. (2025). 
+Vincent, P., Zhou, L., Teachen, L., & Akrami, A. (2023). 
 Different learning algorithms achieve shared optimal outcomes in humans, rats, 
 and mice. bioRxiv, 2023.01.30.526119. https://doi.org/10.1101/2023.01.30.526119
 
@@ -21,26 +24,22 @@ Interstimulus intervals:
     Total Max.: 5000 ms / trial
 
 Number of sessions: 7
-Number of trials: (30 training) + 600 trials/session
+Number of trials: (30 training) + 600 ~ about 1500 trials/session, fix 50 min per session
 Number of subject groups: 2
--> group 1: block size: [50-60]
--> group 2: block size: [130-210]
+-> group 1: block size: [40-60]
+-> group 2: block size: [150-250]
 
 ===============================================================================    
 '''
-###############################################################################
-# This is the main file for the experiment.
-# Params to change: quit -> line 436-437, line 262, NOT ALLOWED IN REAL EXPERIMENT
-# RESULT_PATH (line 76 & 568); Windowsize: line 108; - REMEMBER TO check the 'results' folder first.
-###############################################################################
 
 import pandas as pd
 import numpy as np
 from psychopy import prefs
-import sounddevice as sd
 prefs.hardware['audioLib'] = ['ptb']
-prefs.hardware['audioLatencyMode'] = 0
-prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)'
+prefs.hardware['audioLatencyMode'] = 2
+# prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)' --> used in our lab
+prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
+# import sounddevice as sd
 # print('sound device:', sd.default.device)
 # for i, dev in enumerate(sd.query_devices()):
 #     print (i, dev['name'])
@@ -48,8 +47,8 @@ import os
 from datetime import datetime
 from random import randint
 from calibration import SimpleCalibration
-from psychopy import core, event, visual, logging, gui
-
+from psychopy import core, event, visual, logging, gui, sound
+from psychopy.hardware import keyboard
 
 from stimulus_generator import sample_in_block
 from group_assignment import group_assign
@@ -82,6 +81,14 @@ def experiment_update():
     response_limit = 4
     fixation_duration = 0.35
     feedback = 0.35
+    TOTAL_TIME = 50 * 60  ## 50 mins
+    AUTO_TIMEOUT_THRESHOLD = 3
+    AUTO_EASY_ERROR_THRESHOLD = 3
+    # bonus tier
+    TIER1 = 0.90
+    TIER2 = 0.80
+    TIER3 = 0.70
+    TIER4 = 0.60
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
     os.makedirs(RESULT_PATH, exist_ok=True) # create results folder if not exists
@@ -98,27 +105,27 @@ def experiment_update():
     img_wrong_path = os.path.join(SCRIPT_DIR, "images","wrong.png")
 
 
-    Instruction = (
-    f"Welcome to this experiment!\n\nPlease DO NOT CHANGE the device volume during the experiment.\n\n"
-    f"In each trial, you will hear a sound. Your task is to classify the sound "
-    f"into one of the two categories: A or B.\n\n"
-    f"Press [←] LEFT arrow key for Category A.\n"
-    f"Press [→] RIGHT arrow key for Category B.\n\n"
-    f"You have {response_limit} seconds to respond. "
-    f"If no response is made, it will be marked as incorrect.\n\n"
-    f"Note: the reward is only granted upon completion of all {TOTAL_SESSION} sessions.\n\n"
-    f"You may pause the experiment by pressing 'ESC'.\n"
-    f"During a break, you must type 'resume' within 4 minutes "
-    f"to continue the experiment.\n"
-    f"If you do not return within 4 minutes, "
-    f"the session will terminate automatically.\n"
-    f"You may take at most 2 breaks during the experiment.\n\n"
-    f"Press SPACE to start."
-    )
+    Instruction_1 = (f"Welcome to this experiment!\n\nPress SPACE to continue.")
+    Instruction_2 = (f"In each trial, you will hear a sound. Your task is to classify the sound into "
+                     f"one of two categories: Category A or Category B.\n\nPress SPACE to continue.")
+    Instruction_3 = (f"Press the [S] key for Category A. Press the [K] key for Category B."
+                     f"\n\nPress SPACE to continue.")
+    Instruction_4 = (f"You have {response_limit} seconds to respond. If no response is made, "
+                     f"the trial will be marked as incorrect. \n\nPress SPACE to continue.")
+    Instruction_5 = (f"You may pause the experiment by pressing ESC. "
+                     f"You may take a short pause of up to 1 minute at any time during the experiment. "
+                     f"However, only 2 long breaks of up to 5 minutes are allowed. "
+                     f"Feel free to pause at any time. If a trial is interrupted by a pause, it will be presented again when the experiment resumes.\n\n"
+                     f"Press SPACE to continue.")
+    Instruction_6 = (f"You need to complete 50 minutes of the task. "
+                     f"Pauses and breaks do not count towards the 50 minutes.\n\nPress SPACE to continue.")
+    Instruction_7 = (f"Press [B] to switch between Light Mode and Dark Mode.\n\nPress SPACE to continue.")
+    Instruction_8 = (f"Ready?\n\nPress SPACE to start!")
     
-    choice_A = "Category A: Press [←]"
-    choice_B = "Category B: Press [→]"
-    response_text = 'Please classify the sound by pressing an arrow key.'
+    choice_A = "Category A: Press [S]"
+    choice_B = "Category B: Press [K]"
+    response_text = 'Please classify the sound by pressing a key.'
+    rest_text = "Press ESC to pause/take a long break."
     
     ### initialization
     curr_sess = 0
@@ -127,74 +134,199 @@ def experiment_update():
     curr_trial_sess = 0 # current trial no. in the whole session
     corr_counter_block = 0
     corr_counter_session = 0
+    # pause automatically when subject is not paying attention
+    consecutive_timeout = 0
+    consecutive_easy_error = 0
+    recent_responses = []
+
+    # =========================
+    # emergency_quit
+    # =========================
+    def emergency_quit():
+        pressed = kb.getKeys(
+            keyList=['f12'],
+            waitRelease=False
+        )
+
+        if pressed:
+            finish_experiment()
+
+    # =========================
+    # End page
+    # =========================
+    def finish_experiment():
+        try:
+            probe.stop()
+        except:
+            pass
+
+        text_stim.setText(
+            f"Experiment Finished!\n\n"
+            f"Thank you for your participation."
+        )
+
+        text_stim.setHeight(72)
+        text_stim.pos = (0, 0)
+        text_stim.alignText = 'center'
+        text_stim.draw()
+        win0.flip()
+        core.wait(5)
+        win0.close()
+        core.quit()
 
     # =========================
     # break settings
     # =========================
     break_count = 0
     MAX_BREAK = 2
-    BREAK_LIMIT = 240  # 4 minutes ################################### DEBUG
+    PAUSE_LIMIT = 1*60 # 1 minite short pause
+    BREAK_LIMIT = 5*60 # 5 minutes long break
+    total_pause_time = 0
+    task_time = 0 # precise control for task time
 
     # ============================================================
     # BREAK FUNCTION
     # ============================================================
+    def choose_break_type(break_count):
+        nonlocal dark_mode, bg_color, text_color
+        if break_count >= MAX_BREAK:
+            return 'N'
+        else:
+            text_stim.setText(
+                f"Pause Menu\n\n"
+                f"Press [Y] for a long break (5 minutes).\n"
+                f"Remaining long breaks: {MAX_BREAK - break_count}\n\n"
+                f"Press [N] for a short pause (1 minute).\n\n"
+                f"Press [B] to switch between Light Mode and Dark Mode."
+            )
 
-    def run_break():
+        text_stim.draw()
+        win0.flip()
+
+        while True:
+            text_stim.draw()
+            win0.flip()
+            emergency_quit()
+            keys = event.getKeys()
+            for key in keys:
+                if key.lower() == 'b':
+                    dark_mode, bg_color, text_color = toggle_display_mode(dark_mode)
+                    apply_display_mode()
+
+                    event.clearEvents()
+
+                elif key.lower() == 'y':
+                    return 'Y'
+                elif key.lower() == 'n':
+                    return 'N'
+
+            core.wait(0.05)
+
+    def run_break(break_choice: str, remain_time: int, break_count: int):
+        '''
+        Control breaks and pauses
+
+        break_choice:
+            Y = long break
+            N = short pause
+
+        remain_time:
+            remaining experiment time (seconds)
+
+        break_count:
+            number of long breaks already taken
+        '''
 
         break_clock = core.Clock()
-        typed_resume = ""
+        nonlocal dark_mode, bg_color, text_color
+        if break_choice == "Y" or break_choice == "y":
+            time_limit = BREAK_LIMIT
+            break_count += 1
+        else:
+            time_limit = PAUSE_LIMIT
 
-        while break_clock.getTime() < BREAK_LIMIT:
+        remain_min = remain_time // 60
+        remain_sec = remain_time % 60
 
-            remaining = int(BREAK_LIMIT - break_clock.getTime())
+        r_count = 0
+
+        # countdown period
+        while break_clock.getTime() < time_limit:
+            emergency_quit()
+            remaining = int(time_limit - break_clock.getTime())
 
             mins = remaining // 60
             secs = remaining % 60
 
-            # REUSE EXISTING TEXTSTIM
             text_stim.setText(
-                f"Experiment Paused\n\n"
-                f"Remaining Time: {mins:02d}:{secs:02d}\n\n"
-                f"Breaks used: {break_count}/{MAX_BREAK}\n\n"
-                f'Type "resume" to continue.\n\n'
-                f"The current trial will restart."
+                f"Experiment Paused\n"
+                f"Press [R] twice to continue the experiment.\n\n"
+                f"Remaining break time: {mins:02d}:{secs:02d}\n"
+                f"Long breaks used: {break_count}/{MAX_BREAK}\n"
+                f"Remaining task time: "
+                f"{remain_min:02d}:{remain_sec:02d}\n"
+                f"Press [B] to switch between Light Mode and Dark Mode.\n\n"
+                f"Keep focusing on accuracy to qualify for the Tier 1 bonus reward!\n\nCurrent performance level:"
             )
 
-            text_stim.setHeight(40)
+            text_stim.setHeight(60)
             text_stim.alignText = 'center'
-            text_stim.pos = (0, 0)
+            text_stim.pos = (0, 210)
 
+            update_performance_ring()
             text_stim.draw()
+            performance_bg.draw()
+            performance_bar.draw()
+
+            tier4_text.draw()
+            tier1_text.draw()
+
             win0.flip()
 
             keys = event.getKeys()
-
             for key in keys:
+                if key.lower() == 'b':
+                    dark_mode, bg_color, text_color = toggle_display_mode(dark_mode)
+                    apply_display_mode()
 
-                if key == 'q':
+                    event.clearEvents()
 
-                    win0.close()
-                    core.quit()
-
-                elif key == 'backspace':
-
-                    typed_resume = typed_resume[:-1]
-
-                elif len(key) == 1:
-
-                    typed_resume += key.lower()
-
-                    if len(typed_resume) > 20:
-                        typed_resume = typed_resume[-20:]
-
-                    if typed_resume.lower().endswith("resume"):
-
+                elif key.lower() == 'r':
+                    r_count += 1
+                    if r_count == 2:
                         event.clearEvents()
-                        return True
+                        pause_duration = break_clock.getTime()
+                        return break_count, pause_duration
+                else:
+                    r_count = 0
 
-            core.wait(0.2)
+            core.wait(0.05)
 
-        return False
+        # countdown finished
+        text_stim.setText(
+            "Time over!\n\n"
+            "Press [R] twice to continue the experiment."
+        )
+        text_stim.setHeight(72)
+        text_stim.alignText = 'center'
+        text_stim.pos = (0, 0)
+        r_count = 0
+        while r_count < 2:
+            emergency_quit()
+            text_stim.draw()
+            win0.flip()
+            keys = event.getKeys()
+            for key in keys:
+                if key.lower() == 'r':
+                    r_count += 1
+                else:
+                    r_count = 0
+            core.wait(0.05)
+
+        event.clearEvents()
+
+        pause_duration = break_clock.getTime()
+        return break_count, pause_duration
 
     ## ===================================================================
     ## INFO PAGE ---------------------------------------------------------
@@ -339,8 +471,10 @@ def experiment_update():
 
     ## ===================================================================
     ## BEGIN & INSTRUCTION PAGE ------------------------------------------
+    # ---------- display mode ----------
+    dark_mode = False
     win0 = visual.Window(size=[1920, 1080], screen = 0, monitor='testMonitor',
-                         color= (1,1,1), fullscr=True, # white
+                         fullscr=True,
                          winType='pyglet',
                          allowGUI=False,
                          waitBlanking=True)
@@ -357,55 +491,196 @@ def experiment_update():
             units='pix'
             )
     
-    ## countdown object
+    ## countdown objects
     # countdown bar
     bar_width = 1000
     bar_height = 20
     bar_y_pos = 350
     countdown_bg = visual.Rect(win0, width=bar_width, height=bar_height, 
-                           pos=(0, bar_y_pos), fillColor='grey', 
-                           lineColor='black', units='pix')
+                           pos=(0, bar_y_pos), fillColor= 'grey', 
+                           lineColor= 'grey', units='pix')
     countdown_bar = visual.Rect(win0, width=bar_width, height=bar_height, 
-                            pos=(0, bar_y_pos), fillColor='blue', 
-                            lineColor='blue', units='pix')
+                            pos=(0, bar_y_pos), fillColor=(0.4, 0.7, 1), 
+                            lineColor=(0.4, 0.7, 1), units='pix')
             
     text_stim_resp = visual.TextStim(win0, text=response_text,
-                            pos=(0, 200), height=45, color=(-1, -1, -1), units='pix', wrapWidth=1600,
+                            pos=(0, 200), height=45, units='pix', wrapWidth=2300,
                             alignText='center')
     text_stim_A = visual.TextStim(win0, text=choice_A,
-                            pos=(-400, -150), height=50, color=(-1, -1, -1), units='pix', wrapWidth=1600,
+                            pos=(-400, -150), height=50, units='pix', wrapWidth=2300,
                             alignText='center')
     text_stim_B = visual.TextStim(win0, text=choice_B,
-                            pos=(400, -150), height=50, color=(-1, -1, -1), units='pix', wrapWidth=1600,
+                            pos=(400, -150), height=50, units='pix', wrapWidth=2300,
                             alignText='center')
-    ## feedback object
-    msg_feedback = visual.TextStim(win0, text='Feedback', pos=(0, 150), height=30, units='pix')
-    ## instruction text
-    text_stim = visual.TextStim(win0, color=(-1, -1, -1), units='pix',
-                            height=40, wrapWidth=1400, alignText='left', anchorHoriz='center', anchorVert='center')
-    text_stim.setText(Instruction)
-    text_stim.wrapWidth = 1600
+    rest_text = visual.TextStim(win0, text=rest_text,
+                            pos=(-200, 750), height=40, units='pix', wrapWidth=2300,
+                            alignText='left')
 
+    text_stim = visual.TextStim(
+    win0,
+    color=(-1, -1, -1),
+    units='pix',
+    height=72,
+    wrapWidth=2300,
+    alignText='center',
+    anchorHoriz='center',
+    anchorVert='center'
+    )
+
+    tier4_text = visual.TextStim(
+    win0,
+    text="Tier 4",
+    pos=(-250, -250),
+    height=30,
+    units='pix'
+    )
+
+    tier1_text = visual.TextStim(
+        win0,
+        text="Tier 1",
+        pos=(250, -250),
+        height=30,
+        units='pix'
+    )
+
+
+    performance_bg = visual.Rect(
+    win0,
+    width=500,
+    height=40,
+    pos=(0, -300),
+    fillColor='grey',
+    lineColor='grey',
+    units='pix'
+    )
+
+    performance_bar = visual.Rect(
+        win0,
+        width=0,
+        height=40,
+        pos=(-250, -300),
+        fillColor=(0.4, 0.7, 1),
+        lineColor=(0.4, 0.7, 1),
+        units='pix'
+    )
+
+    def toggle_display_mode(dark_mode):
+        dark_mode = not dark_mode
+        if dark_mode:
+            bg_color = (-1, -1, -1)
+            text_color = (1, 1, 1)
+
+        else:
+            bg_color = (0.8, 0.8, 0.8)
+            text_color = (-1, -1, -1)
+
+        return dark_mode, bg_color, text_color
+
+
+    def apply_display_mode():
+        win0.color = bg_color
+        text_stim.color = text_color
+        text_stim_resp.color = text_color
+        text_stim_A.color = text_color
+        text_stim_B.color = text_color
+        rest_text.color = text_color
+        fixation.lineColor = text_color
+        performance_bg.lineColor = text_color
+        tier4_text.color = text_color
+        tier1_text.color = text_color
+
+    def update_performance_ring():
+        accuracy = corr_counter_session / max(1, curr_trial_sess - 1)
+        progress = max(0, min((accuracy - TIER4) / (TIER1 - TIER4), 1.0))
+
+        bar_width = 500 * progress
+
+        performance_bar.width = bar_width
+        performance_bar.pos = (-250 + bar_width/2, -300)
+
+        if accuracy >= TIER1:
+            performance_bar.fillColor = "gold"
+            performance_bar.lineColor = "gold"
+
+        elif accuracy >= TIER2:
+            performance_bar.fillColor = "limegreen"
+            performance_bar.lineColor = "limegreen"
+        elif accuracy >= TIER3:
+            performance_bar.fillColor = "red"
+            performance_bar.lineColor = "red"
+        else:
+            performance_bar.fillColor = (0.4, 0.7, 1)
+            performance_bar.lineColor = (0.4, 0.7, 1)
+
+    kb = keyboard.Keyboard()
+    probe = sound.Sound(
+        value=np.zeros(int(44100 * 0.3), dtype=np.float32),
+        stereo=True,
+        sampleRate=44100
+    )
+
+
+    # ---------- instruction pages ----------
+
+    instruction_pages = [
+        Instruction_1,
+        Instruction_2,
+        Instruction_3,
+        Instruction_4,
+        Instruction_5,
+        Instruction_6,
+        Instruction_7,
+        Instruction_8
+    ]
+
+    # ---------- default mode ----------
+
+    bg_color = (0.8, 0.8, 0.8)
+    text_color = (-1, -1, -1)
+    apply_display_mode()
+
+    win0.color = bg_color
+    text_stim.color = text_color
     event.clearEvents()
-    text_stim.draw()
-    win0.flip()
-
-    continue_loop = True
-    while continue_loop:
+    page_idx = 0
+    while page_idx < len(instruction_pages):
+        emergency_quit() # experimenter emergency quit: Ctrl + Shift + Q
+        
+        # current instruction page
+        text_stim.setText(instruction_pages[page_idx])
+        win0.color = bg_color
+        text_stim.color = text_color
         text_stim.draw()
         win0.flip()
-    
-        keys = event.getKeys(keyList=['space', 'q'])
+        keys = event.getKeys(keyList=['space', 'b'])
+        # next page
         if 'space' in keys:
-            continue_loop = False
-        ## quit option for test
-        if 'q' in keys:
-            win0.close()
-            core.quit()
-    
-    win0.color = (1, 1, 1)
-    win0.flip()
+            page_idx += 1
+            event.clearEvents()
+            core.wait(0.15)
+        # toggle dark/light mode
+        elif 'b' in keys:
+            dark_mode, bg_color, text_color = toggle_display_mode(dark_mode)
+            apply_display_mode()
+            event.clearEvents()
+    # ---------- keep selected theme ----------
+    win0.color = bg_color
+    text_stim.color = text_color
+    fixation.lineColor = text_color
+    text_stim_resp.color = text_color
+    text_stim_A.color = text_color
+    text_stim_B.color = text_color
+    text_stim_B.color = text_color
+    rest_text.color = text_color
     event.clearEvents()
+
+    # ====================================
+    # Experiment timer
+    # ====================================
+
+    experiment_clock = core.Clock()
+    experiment_clock.reset()
+
     ## =========================================================================
     ## SESSION CONDITIONS -------------------------------------------------------
     ## 1) feedback imgs & Block size arrangement; => curr_block_arr, curr_total_block
@@ -415,13 +690,18 @@ def experiment_update():
 
     ### feedback images setting
     img_correct = visual.ImageStim(win0, image=img_correct_path, 
-                                   size=(406, 512), units='pix')
+                                   size=(500, 500), units='pix')
     img_incorrect = visual.ImageStim(win0, image=img_wrong_path, 
-                                     size=(339, 512), units='pix')
+                                     size=(500, 500), units='pix')
 
     # BLOCK ARRANGEMENT
     curr_block_arr, curr_total_block = block_size(part_group)
     print(f'DEBUG: block sizes: {curr_block_arr}; total block: {curr_total_block}')
+    if part_group == 1:
+        if randint(0, 1) == 0:
+            first_dist = 1
+        else:
+            first_dist = 2
 
     train = False
     if curr_sess == 1:
@@ -441,18 +721,36 @@ def experiment_update():
     ## MAIN LOOP
 
     for block_no in range(1, curr_total_block+1):
+        if finish:
+            break
         event.clearEvents()
         trial_resp_blk = 0
         corr_counter_block = 0
         updated_exp_date = datetime.today().strftime('%Y%m%d')
         updated_block_no = block_no # current block
-        if train == True:
-            if block_no == 1:
-                updated_dist = 0 # uniform
-            if block_no > 1:
-                updated_dist = randint(1, 2) # 1 = hard-A, 2 = hard-B
-        else: # no training 'block'
-            updated_dist = randint(1, 2)
+        if part_group == 1:
+            # ---------- Long-block group ----------
+            if train and block_no == 1:
+                updated_dist = 0
+            else:
+                if train:
+                    formal_idx = block_no - 2
+                else:
+                    formal_idx = block_no - 1
+                if formal_idx % 2 == 0:
+                    updated_dist = first_dist
+                else:
+                    updated_dist = 3 - first_dist
+        else:
+            # ---------- Short-block group ----------
+            if train:
+                if block_no == 1:
+                    updated_dist = 0
+                else:
+                    updated_dist = randint(1, 2)
+            else:
+                updated_dist = randint(1, 2)
+
         # generate samples for this block
         # sample_in_block(id, session, distribution_type, num_block, num_trials, physical_min, physical_max)
         # physical_min/max are measured in dba
@@ -463,8 +761,14 @@ def experiment_update():
         corr_sides = df_block_sample['Side']
         distances = df_block_sample['Distance_toB_in_dba']
         boundary = df_block_sample['Physical_Boundary'].iloc[0]
+        easy_threshold = df_block_sample['Easy_threshold'].iloc[0]
 
         for trial_no in range(1, curr_block_arr[block_no-1] + 1):
+            effective_time = task_time
+
+            if task_time >= TOTAL_TIME:
+                finish = True
+                break
             event.clearEvents()
             ### update file info
             updated_exp_time = datetime.today().strftime('%H%M%S')
@@ -480,11 +784,6 @@ def experiment_update():
                 core.wait(fixation_duration)
 
                 ### Listen
-                text_stim.setText('Listen')
-                text_stim.setHeight(72)
-                text_stim.alignText = 'center'
-                text_stim.draw()
-                win0.flip()
                 #### set stimulus amplitude
                 updated_amp = amplitudes.iloc[trial_no-1]
                 playback_volume = calibration.dba_to_amplitude(updated_amp)
@@ -493,54 +792,28 @@ def experiment_update():
                 distance = distances.iloc[trial_no-1]
                 true_cat = corr_sides.iloc[trial_no-1]
                 # play
-                probe = calibration.generate_white_noise(playback_volume, duration=0.3) # use the same noise in calibration
+                signal = calibration.generate_white_noise(playback_volume, duration=0.3)
+                probe.setSound(signal) # use the same noise in calibration
                 probe.play()
                 sound_clock = core.Clock()
                 paused = False
                 while sound_clock.getTime() < probe.getDuration():
-
+                        emergency_quit()
                         keys = event.getKeys()
 
                         if 'escape' in keys:
-                            probe.stop()
-
-                            if break_count >= MAX_BREAK:
-                                break
-
-                            break_count += 1
-
-                            continue_exp = run_break()
+                            try:
+                                probe.stop()
+                            except:
+                                pass
+                            choice = choose_break_type(break_count)
+                            break_count, pause_duration = run_break(choice, int(TOTAL_TIME - effective_time), break_count)
+                            total_pause_time += pause_duration
+                            paused = True
                             event.clearEvents()
-
-                            if continue_exp:
-
-                                paused = True
-                                event.clearEvents()
-                                break
-
-                            else:
-
-                                text_stim.setText(
-                                    "Session terminated.\n\n"
-                                    "The session will not be counted as completed."
-                                )
-
-                                text_stim.setHeight(50)
-                                text_stim.alignText = 'center'
-                                text_stim.pos = (0, 0)
-
-                                text_stim.draw()
-                                win0.flip()
-
-                                core.wait(5)
-
-                                win0.close()
-                                core.quit()
-
-                        core.wait(0.01)
+                            break
 
                 if paused:
-
                     continue
 
                 ### Respond
@@ -551,6 +824,7 @@ def experiment_update():
                 rt = -1
                 responded = False
                 while resp_clock.getTime() < response_limit:
+                    emergency_quit()
                     time_left = response_limit - resp_clock.getTime()
                     ratio = max(0, time_left / response_limit)
                     new_width = bar_width * ratio
@@ -562,6 +836,7 @@ def experiment_update():
                     text_stim_resp.draw()
                     text_stim_A.draw()
                     text_stim_B.draw()
+                    rest_text.draw()
                     win0.flip()
 
                     keys = event.getKeys(timeStamped=resp_clock)
@@ -572,53 +847,30 @@ def experiment_update():
                             # ====================================
 
                             if key_name == 'escape':
-
-                                if break_count >= MAX_BREAK:
-                                    break
-
-                                break_count += 1
-
-                                continue_exp = run_break()
-
+                                try:
+                                    probe.stop()
+                                except:
+                                    pass
+                                remain_time = int(TOTAL_TIME - effective_time)
+                                choice = choose_break_type(break_count)
+                                break_count, pause_duration = run_break(choice, int(TOTAL_TIME - effective_time), break_count)
+                                total_pause_time += pause_duration
+                                paused = True
                                 event.clearEvents()
-
-                                if continue_exp:
-
-                                    paused = True
-                                    event.clearEvents()
-                                    break
-
-                                else:
-
-                                    text_stim.setText(
-                                        "Session terminated.\n\n"
-                                        "The session will not be counted as completed."
-                                    )
-
-                                    text_stim.setHeight(50)
-                                    text_stim.alignText = 'center'
-                                    text_stim.pos = (0, 0)
-
-                                    text_stim.draw()
-                                    win0.flip()
-
-                                    core.wait(5)
-
-                                    win0.close()
-                                    core.quit()
+                                break
 
                             # ====================================
                             # response handling
                             # ====================================
 
-                            if key_name not in ['left', 'right', 'q']:
+                            if key_name not in ['s', 'k']:
                                 continue
 
                             rt = key_time
                             trial_resp += 1
                             trial_resp_blk += 1
 
-                            if key_name == 'left':
+                            if key_name == 's':
 
                                 updated_sub_response = 0
 
@@ -654,10 +906,14 @@ def experiment_update():
                                 print('Debug: A chosen.')
 
                                 responded = True
+                                recent_responses.append((updated_sub_response, updated_feed))
+                                if len(recent_responses) > 8:
+                                    recent_responses.pop(0)
+                                consecutive_timeout = 0
 
                                 break
 
-                            elif key_name == 'right':
+                            elif key_name == 'k':
 
                                 updated_sub_response = 1 # pressed right key
 
@@ -695,12 +951,11 @@ def experiment_update():
                                 print('DEBUG: B chosen.')
 
                                 responded = True
+                                recent_responses.append((updated_sub_response, updated_feed))
+                                if len(recent_responses) > 8:
+                                    recent_responses.pop(0)
+                                consecutive_timeout = 0
 
-                                break
-
-                            elif key_name == 'q':
-                                win0.close()
-                                core.quit()
                                 break
                         if paused or responded:
                             break
@@ -708,6 +963,7 @@ def experiment_update():
                     if paused:
                         continue
                     updated_feed = 0
+                    consecutive_timeout += 1
                     print(f"DEBUG: Trial {trial_no} - Timed Out! Auto-switching to feedback.")
 
                 win0.flip()
@@ -739,7 +995,6 @@ def experiment_update():
                                 })
 
                 ### Feedback
-                msg_feedback.draw()
                 if updated_feed == 0:
                     img_to_draw = img_incorrect
                 else:
@@ -748,6 +1003,102 @@ def experiment_update():
                 win0.flip()
 
                 core.wait(feedback)
+                task_time += fixation_duration
+                task_time += probe.getDuration()
+                task_time += feedback
+
+                if rt == -1:
+                    task_time += response_limit
+                else:
+                    task_time += rt
+
+                ## count easy trial error
+                if rt != -1 and updated_feed == 0 and distance >= easy_threshold:
+                    consecutive_easy_error += 1
+                else:
+                    consecutive_easy_error = 0
+                ## stop when several consecutive no response
+                if consecutive_timeout >= AUTO_TIMEOUT_THRESHOLD:
+                    text_stim.setText(
+                        f"Three consecutive trials received no response.\n\n"
+                        f"The experiment has been paused automatically."
+                    )
+
+                    text_stim.draw()
+                    win0.flip()
+                    core.wait(3)
+                    event.clearEvents()
+                    choice = "N"
+
+                    break_count, pause_duration = run_break(
+                        choice,
+                        int(TOTAL_TIME - effective_time),
+                        break_count
+                    )
+
+                    total_pause_time += pause_duration
+
+                    consecutive_timeout = 0
+                    recent_responses.clear()
+                
+                ## stop when 3 consecutive easy trial errors
+                if consecutive_easy_error >= AUTO_EASY_ERROR_THRESHOLD:
+                    text_stim.setText(
+                        f"Several easy trials were answered incorrectly.\n\n"
+                        f"Please take a short pause and refocus."
+                    )
+
+                    text_stim.draw()
+                    win0.flip()
+                    core.wait(3)
+                    event.clearEvents()
+                    choice = "N"
+
+                    break_count, pause_duration = run_break(
+                        choice,
+                        int(TOTAL_TIME - effective_time),
+                        break_count
+                    )
+
+                    total_pause_time += pause_duration
+
+                    consecutive_easy_error = 0
+                    recent_responses.clear()
+
+                ## stop when getting 8 same responses with 4 wrongs
+                if len(recent_responses) == 8:
+                    same_key = all(
+                        r[0] == recent_responses[0][0]
+                        for r in recent_responses
+                    )
+
+                    error_count = sum(
+                        1 for r in recent_responses
+                        if r[1] == 0
+                    )
+
+                    if same_key and error_count >= 4:
+                        text_stim.setText(
+                        f"A repetitive response pattern was detected.\n\n"
+                        f"Please take a short pause and refocus."
+                    )
+
+                        text_stim.draw()
+                        win0.flip()
+                        core.wait(3)
+                        event.clearEvents()
+                        choice = "N"
+
+                        break_count, pause_duration = run_break(
+                            choice,
+                            int(TOTAL_TIME - effective_time),
+                            break_count
+                        )
+
+                        total_pause_time += pause_duration
+
+                        recent_responses.clear()
+
                 ### Save record
                 file_name = f"{subj_id}_{part_group}.csv"
                 pull_file = os.path.join(RESULT_PATH, file_name)
@@ -819,19 +1170,10 @@ def experiment_update():
             print(f"ERROR: Info file {FILENAME_INFO} not found. Cannot update session count.")
         except Exception as e:
             print(f"An error occurred: {e}")
+
+        finish_experiment()
     
         ########################################################################################
-        ### FINISH PAGE
-        text_stim.setText("Experiment Finished!\n\nThank you for your participation.")
-        text_stim.setHeight(72)
-        text_stim.pos = (0, 0)
-        text_stim.alignText = 'center'
-        text_stim.draw()
-        win0.flip()
-        core.wait(5.0)
-        win0.close()
-        core.quit()
-
 
 # save to file
 def create_exp_file(id,group,first_record):

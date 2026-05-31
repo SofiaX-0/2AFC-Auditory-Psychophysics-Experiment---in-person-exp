@@ -27,21 +27,27 @@ class SimpleCalibration:
     def generate_white_noise(self, amplitude, duration=8.0, sample_rate=44100):
         n_samples = int(duration * sample_rate)
         signal = self.base_noise[:n_samples] * amplitude
-        return sound.Sound(
-            value=signal,
-            stereo=True,
-            sampleRate=sample_rate
-        )
+        return signal.astype(np.float32)
     
     def measure_dBA(self, amplitude):
-        """Measure dBA for a given amplitude."""
         print(f"\n=== Amplitude = {amplitude:.3f} ===")
-        tone = self.generate_white_noise(amplitude)
+
+        signal = self.generate_white_noise(amplitude)
+
+        tone = sound.Sound(
+            value=signal,
+            stereo=True,
+            sampleRate=44100
+        )
+
         print("Playing white noise (8 seconds)...")
+
         tone.play()
-        core.wait(tone.getDuration()) # wait for the tone to finish playing
-        dB = float(input(f"Enter dB(A): ")) # ask the user to enter the dB(A)
-        return dB # return the dB(A)
+        core.wait(tone.getDuration())
+
+        dB = float(input("Enter dB(A): "))
+
+        return dB
     
     def run(self, amplitudes=None, n_repeats=5):
         """Run repeated calibration sessions."""

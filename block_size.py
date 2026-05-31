@@ -1,7 +1,6 @@
 ##############################################################################################
 # This is a file to define the function block_size()
 # This will generate block sizes for every session and return the block size arrangement.
-# Params to change: target_sum = 600; 2*N (line 31&34); 2*b_min, b_max (line 32&35)
 #############################################################################################
 
 
@@ -16,22 +15,22 @@ def block_size(group):
     group: 0 - short blocks group; 1 - long blocks group
     Methods:
     Generates N different block sizes (b1, b2... bN)
-    Sum of bi = 600
-    Group 0: N = 11, bi= [40,60]
-    Group 1: N = 4, bi=[130,210];
+    Sum of bi = 3000 (impossible to finish in 50 min)
+    Group 0: N = 25, bi= [40,60]
+    Group 1: N = 10, bi=[150,250];
     Change the rule;
 
     B. return the block size arrangement, ready to be written into the main csv doc. 
     '''
-    target_sum = 600 # total trial number
+    target_sum = 3000 # total trial number, a number unable to finish 
     max_attempts = 1000 # attempts to find series
 
     if group == 0: # short-block group
-        N = 11 # N: number of blocks
+        N = 60 # N: number of blocks
         b_min, b_max = 40, 60
     else:
-        N = 4
-        b_min, b_max = 130, 210
+        N = 15
+        b_min, b_max = 150, 250
     
     # Try to generate series that satisfy constraints
     for attempt in range(max_attempts):
@@ -79,5 +78,5 @@ def block_size(group):
     return res, N
 
 ## DEBUG
-## group = int(input("enter group:"))
-## print(block_size(group))
+# group = int(input("enter group:"))
+# print(block_size(group))

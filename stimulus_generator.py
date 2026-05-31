@@ -89,12 +89,11 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
         # logical values are already defined in logarithmic stimulus space
         # linearly map logical values onto the calibrated stimulus range
 
-        physical_boundary = (physical_min + physical_max) / 2 # eg. 60 dba
+        physical_boundary = (physical_min + physical_max) / 2 # eg, 60 dba
         physical_scale = (physical_max - physical_min) / 2 # eg, 15 dba
-
+        easy_thereshold = 0.5 * physical_scale # eg, 7.5 dba
         Target_dba = (physical_boundary + logical_val * physical_scale) # current stimulus dba
-
-        distance_toB_in_dba = Target_dba - physical_boundary
+        distance_toB_in_dba = abs(Target_dba - physical_boundary)
         side = 0 if logical_val < 0 else 1
         
         block_results.append({
@@ -104,7 +103,8 @@ def sample_in_block(id, session, distribution_type, num_block, num_trials, physi
             'Target_dba': round(Target_dba, 4),
             'Physical_Boundary': round(physical_boundary, 4),
             'Side': side,
-            'Distance_toB_in_dba': round(distance_toB_in_dba, 4)
+            'Distance_toB_in_dba': round(distance_toB_in_dba, 4),
+            'Easy_threshold': round(easy_thereshold, 2)
         })
     if num_trials < 5:
         n_bins = 3
