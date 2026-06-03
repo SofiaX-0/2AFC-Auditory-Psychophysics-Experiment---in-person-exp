@@ -39,6 +39,7 @@ prefs.hardware['audioLib'] = ['ptb']
 prefs.hardware['audioLatencyMode'] = 2
 # prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)' --> used in our lab
 prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
+# prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
 # import sounddevice as sd
 # print('sound device:', sd.default.device)
 # for i, dev in enumerate(sd.query_devices()):
@@ -165,7 +166,7 @@ def experiment_update():
             f"Thank you for your participation."
         )
 
-        text_stim.setHeight(72)
+        text_stim.setHeight(72*SY)
         text_stim.pos = (0, 0)
         text_stim.alignText = 'center'
         text_stim.draw()
@@ -192,6 +193,9 @@ def experiment_update():
         if break_count >= MAX_BREAK:
             return 'N'
         else:
+            text_stim.setHeight(60*SY)
+            text_stim.pos = (0, 0)
+            text_stim.alignText = 'center'
             text_stim.setText(
                 f"Pause Menu\n\n"
                 f"Press [Y] for a long break (5 minutes).\n"
@@ -269,9 +273,9 @@ def experiment_update():
                 f"Keep focusing on accuracy to qualify for the Tier 1 bonus reward!\n\nCurrent performance level:"
             )
 
-            text_stim.setHeight(60)
+            text_stim.setHeight(45*SY)
             text_stim.alignText = 'center'
-            text_stim.pos = (0, 210)
+            text_stim.pos = (0, 120 * SY)
 
             update_performance_ring()
             text_stim.draw()
@@ -307,7 +311,7 @@ def experiment_update():
             "Time over!\n\n"
             "Press [R] twice to continue the experiment."
         )
-        text_stim.setHeight(72)
+        text_stim.setHeight(72*SY)
         text_stim.alignText = 'center'
         text_stim.pos = (0, 0)
         r_count = 0
@@ -481,11 +485,22 @@ def experiment_update():
 
     win0.mouseVisible = False
 
+    # ====================================
+    # UI scaling
+    # ====================================
+
+    screen_w, screen_h = win0.size
+
+    SX = screen_w / 1920
+    SY = screen_h / 1080
+
+    print(f"Screen: {screen_w} x {screen_h}")
+
     ## fixation text
     ### Fixation
     fixation = visual.ShapeStim(win0, 
-            vertices=((0, -30), (0, 30), (0, 0), (-30, 0), (30, 0)),
-            lineWidth=5,
+            vertices=((0, -30*SY), (0, 30*SY), (0, 0), (-30*SX, 0), (30*SX, 0)),
+            lineWidth=5 * min(SX, SY) ,
             closeShape=False,
             lineColor='black',
             units='pix'
@@ -493,9 +508,9 @@ def experiment_update():
     
     ## countdown objects
     # countdown bar
-    bar_width = 1000
-    bar_height = 20
-    bar_y_pos = 350
+    bar_width = 1000 * SX
+    bar_height = 20 * SY
+    bar_y_pos = 350 * SY
     countdown_bg = visual.Rect(win0, width=bar_width, height=bar_height, 
                            pos=(0, bar_y_pos), fillColor= 'grey', 
                            lineColor= 'grey', units='pix')
@@ -504,24 +519,32 @@ def experiment_update():
                             lineColor=(0.4, 0.7, 1), units='pix')
             
     text_stim_resp = visual.TextStim(win0, text=response_text,
-                            pos=(0, 200), height=45, units='pix', wrapWidth=2300,
+                            pos=(0, 200*SY), height=45*SY, units='pix', wrapWidth=screen_w * 0.9,
                             alignText='center')
     text_stim_A = visual.TextStim(win0, text=choice_A,
-                            pos=(-400, -150), height=50, units='pix', wrapWidth=2300,
+                            pos=(-400*SX, -150*SY), height=50*SY, units='pix', wrapWidth=screen_w * 0.9,
                             alignText='center')
     text_stim_B = visual.TextStim(win0, text=choice_B,
-                            pos=(400, -150), height=50, units='pix', wrapWidth=2300,
+                            pos=(400*SX, -150*SY), height=50*SY, units='pix', wrapWidth=screen_w * 0.9,
                             alignText='center')
-    rest_text = visual.TextStim(win0, text=rest_text,
-                            pos=(-200, 750), height=40, units='pix', wrapWidth=2300,
-                            alignText='left')
+    rest_text = visual.TextStim(
+        win0,
+        text=rest_text,
+        pos=(-screen_w/2 + 30*SX,
+            screen_h/2 - 40*SY),
+        height=30*SY,
+        units='pix',
+        wrapWidth=1500*SX,
+        alignText='left',
+        anchorHoriz='left'
+    )
 
     text_stim = visual.TextStim(
     win0,
     color=(-1, -1, -1),
     units='pix',
-    height=72,
-    wrapWidth=2300,
+    height=60*SY,
+    wrapWidth=screen_w * 0.9,
     alignText='center',
     anchorHoriz='center',
     anchorVert='center'
@@ -530,25 +553,25 @@ def experiment_update():
     tier4_text = visual.TextStim(
     win0,
     text="Tier 4",
-    pos=(-250, -250),
-    height=30,
+    pos=(-250*SX, -250*SY),
+    height=30*SY,
     units='pix'
     )
 
     tier1_text = visual.TextStim(
         win0,
         text="Tier 1",
-        pos=(250, -250),
-        height=30,
+        pos=(250*SX, -250*SY),
+        height=30*SY,
         units='pix'
     )
 
 
     performance_bg = visual.Rect(
     win0,
-    width=500,
-    height=40,
-    pos=(0, -300),
+    width=500*SX,
+    height=40*SY,
+    pos=(0, -300*SY),
     fillColor='grey',
     lineColor='grey',
     units='pix'
@@ -557,8 +580,8 @@ def experiment_update():
     performance_bar = visual.Rect(
         win0,
         width=0,
-        height=40,
-        pos=(-250, -300),
+        height=40*SY,
+        pos=(-250*SX, -300*SY),
         fillColor=(0.4, 0.7, 1),
         lineColor=(0.4, 0.7, 1),
         units='pix'
@@ -593,10 +616,10 @@ def experiment_update():
         accuracy = corr_counter_session / max(1, curr_trial_sess - 1)
         progress = max(0, min((accuracy - TIER4) / (TIER1 - TIER4), 1.0))
 
-        bar_width = 500 * progress
+        bar_width = 500 * SX * progress
 
         performance_bar.width = bar_width
-        performance_bar.pos = (-250 + bar_width/2, -300)
+        performance_bar.pos = (-250 * SX + bar_width/2, -300 * SY)
 
         if accuracy >= TIER1:
             performance_bar.fillColor = "gold"
@@ -690,9 +713,9 @@ def experiment_update():
 
     ### feedback images setting
     img_correct = visual.ImageStim(win0, image=img_correct_path, 
-                                   size=(500, 500), units='pix')
+                                   size=(500*SX, 500*SY), units='pix')
     img_incorrect = visual.ImageStim(win0, image=img_wrong_path, 
-                                     size=(500, 500), units='pix')
+                                     size=(500*SX, 500*SY), units='pix')
 
     # BLOCK ARRANGEMENT
     curr_block_arr, curr_total_block = block_size(part_group)
@@ -1019,6 +1042,9 @@ def experiment_update():
                     consecutive_easy_error = 0
                 ## stop when several consecutive no response
                 if consecutive_timeout >= AUTO_TIMEOUT_THRESHOLD:
+                    text_stim.setHeight(60*SY)
+                    text_stim.pos = (0,0)
+                    text_stim.alignText = 'center'
                     text_stim.setText(
                         f"Three consecutive trials received no response.\n\n"
                         f"The experiment has been paused automatically."
@@ -1043,6 +1069,9 @@ def experiment_update():
                 
                 ## stop when 3 consecutive easy trial errors
                 if consecutive_easy_error >= AUTO_EASY_ERROR_THRESHOLD:
+                    text_stim.setHeight(60*SY)
+                    text_stim.pos = (0,0)
+                    text_stim.alignText = 'center'
                     text_stim.setText(
                         f"Several easy trials were answered incorrectly.\n\n"
                         f"Please take a short pause and refocus."
@@ -1078,6 +1107,9 @@ def experiment_update():
                     )
 
                     if same_key and error_count >= 4:
+                        text_stim.setHeight(60*SY)
+                        text_stim.pos = (0,0)
+                        text_stim.alignText = 'center'
                         text_stim.setText(
                         f"A repetitive response pattern was detected.\n\n"
                         f"Please take a short pause and refocus."
