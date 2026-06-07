@@ -15,16 +15,20 @@ Different learning algorithms achieve shared optimal outcomes in humans, rats,
 and mice. bioRxiv, 2023.01.30.526119. https://doi.org/10.1101/2023.01.30.526119
 
 
-Interstimulus intervals: 
-        350ms Fixation;
-        (300ms stimulus);
-        4000ms waiting for response;
-        350ms Feedback
-    -------------------------------
-    Total Max.: 5000 ms / trial
+Interstimulus intervals:
+        100ms pre-fixation;
+        500ms fixation;
+        100ms post-fixation;
+        (300ms stimulus) with up to 5000ms response window;
+        500ms feedback;
+        up to 3000ms next-trial page
+    --------------------------------
+    Estimated duration: 3000-9200 ms / trial
 
-Number of sessions: 7
-Number of trials: (30 training) + 600 ~ about 1500 trials/session, fix 50 min per session
+Number of sessions: 5; extra sessions 6-7 available
+Number of trials:
+    Session 1: 30 warm-up + 600 formal trials
+    Session 2-7: 600 formal trials
 Number of subject groups: 2
 -> group 1: block size: [40-60]
 -> group 2: block size: [150-250]
@@ -39,7 +43,7 @@ prefs.hardware['audioLib'] = ['ptb']
 prefs.hardware['audioLatencyMode'] = 2
 # prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)' --> used in our lab
 prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
-# prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
+# prefs.hardware['audioDevice'] = "Speakers (FiiO K7)" --> used in our lab
 # import sounddevice as sd
 # print('sound device:', sd.default.device)
 # for i, dev in enumerate(sd.query_devices()):
@@ -79,17 +83,19 @@ def experiment_update():
     '''
     ## basic settings
     TOTAL_SESSION = 7
-    response_limit = 4
-    fixation_duration = 0.35
-    feedback = 0.35
-    TOTAL_TIME = 50 * 60  ## 50 mins
+    FORMAL_TRIAL_NUMBER = 600
+    response_limit = 5
+    fixation_duration = 0.5
+    feedback = 0.5
+    PRE_FIXATION = 0.1
+    POST_FIXATION = 0.1
     AUTO_TIMEOUT_THRESHOLD = 3
     AUTO_EASY_ERROR_THRESHOLD = 3
     # bonus tier
-    TIER1 = 0.90
-    TIER2 = 0.80
-    TIER3 = 0.70
-    TIER4 = 0.60
+    TIER1 = 0.95
+    TIER2 = 0.90
+    TIER3 = 0.80
+    TIER4 = 0.70
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
     os.makedirs(RESULT_PATH, exist_ok=True) # create results folder if not exists
@@ -104,29 +110,9 @@ def experiment_update():
     ## feedback images
     img_correct_path = os.path.join(SCRIPT_DIR, "images","correct.png")
     img_wrong_path = os.path.join(SCRIPT_DIR, "images","wrong.png")
-
-
-    Instruction_1 = (f"Welcome to this experiment!\n\nPress SPACE to continue.")
-    Instruction_2 = (f"In each trial, you will hear a sound. Your task is to classify the sound into "
-                     f"one of two categories: Category A or Category B.\n\nPress SPACE to continue.")
-    Instruction_3 = (f"Press the [S] key for Category A. Press the [K] key for Category B."
-                     f"\n\nPress SPACE to continue.")
-    Instruction_4 = (f"You have {response_limit} seconds to respond. If no response is made, "
-                     f"the trial will be marked as incorrect. \n\nPress SPACE to continue.")
-    Instruction_5 = (f"You may pause the experiment by pressing ESC. "
-                     f"You may take a short pause of up to 1 minute at any time during the experiment. "
-                     f"However, only 2 long breaks of up to 5 minutes are allowed. "
-                     f"Feel free to pause at any time. If a trial is interrupted by a pause, it will be presented again when the experiment resumes.\n\n"
-                     f"Press SPACE to continue.")
-    Instruction_6 = (f"You need to complete 50 minutes of the task. "
-                     f"Pauses and breaks do not count towards the 50 minutes.\n\nPress SPACE to continue.")
-    Instruction_7 = (f"Press [B] to switch between Light Mode and Dark Mode.\n\nPress SPACE to continue.")
-    Instruction_8 = (f"Ready?\n\nPress SPACE to start!")
     
-    choice_A = "Category A: Press [S]"
-    choice_B = "Category B: Press [K]"
-    response_text = 'Please classify the sound by pressing a key.'
-    rest_text = "Press ESC to pause/take a long break."
+    choice_A = "A"
+    choice_B = "B"
     
     ### initialization
     curr_sess = 0
@@ -135,6 +121,8 @@ def experiment_update():
     curr_trial_sess = 0 # current trial no. in the whole session
     corr_counter_block = 0
     corr_counter_session = 0
+    formal_trial_count = 0
+    formal_correct_count = 0
     # pause automatically when subject is not paying attention
     consecutive_timeout = 0
     consecutive_easy_error = 0
@@ -178,159 +166,71 @@ def experiment_update():
     # =========================
     # break settings
     # =========================
-    break_count = 0
-    MAX_BREAK = 2
-    PAUSE_LIMIT = 1*60 # 1 minite short pause
-    BREAK_LIMIT = 5*60 # 5 minutes long break
-    total_pause_time = 0
-    task_time = 0 # precise control for task time
+    break_used = False
 
     # ============================================================
     # BREAK FUNCTION
     # ============================================================
-    def choose_break_type(break_count):
-        nonlocal dark_mode, bg_color, text_color
-        if break_count >= MAX_BREAK:
-            return 'N'
-        else:
-            text_stim.setHeight(60*SY)
-            text_stim.pos = (0, 0)
-            text_stim.alignText = 'center'
-            text_stim.setText(
-                f"Pause Menu\n\n"
-                f"Press [Y] for a long break (5 minutes).\n"
-                f"Remaining long breaks: {MAX_BREAK - break_count}\n\n"
-                f"Press [N] for a short pause (1 minute).\n\n"
-                f"Press [B] to switch between Light Mode and Dark Mode."
-            )
 
-        text_stim.draw()
-        win0.flip()
-
-        while True:
-            text_stim.draw()
-            win0.flip()
-            emergency_quit()
-            keys = event.getKeys()
-            for key in keys:
-                if key.lower() == 'b':
-                    dark_mode, bg_color, text_color = toggle_display_mode(dark_mode)
-                    apply_display_mode()
-
-                    event.clearEvents()
-
-                elif key.lower() == 'y':
-                    return 'Y'
-                elif key.lower() == 'n':
-                    return 'N'
-
-            core.wait(0.05)
-
-    def run_break(break_choice: str, remain_time: int, break_count: int):
-        '''
-        Control breaks and pauses
-
-        break_choice:
-            Y = long break
-            N = short pause
-
-        remain_time:
-            remaining experiment time (seconds)
-
-        break_count:
-            number of long breaks already taken
-        '''
-
+    def run_break():
+        resume_rect, resume_text = create_button(
+            "Resume",
+            pos=(0, -120 * SY),
+            width=260,
+            height=80
+        )
         break_clock = core.Clock()
-        nonlocal dark_mode, bg_color, text_color
-        if break_choice == "Y" or break_choice == "y":
-            time_limit = BREAK_LIMIT
-            break_count += 1
-        else:
-            time_limit = PAUSE_LIMIT
-
-        remain_min = remain_time // 60
-        remain_sec = remain_time % 60
-
-        r_count = 0
+        time_limit = 5 * 60
 
         # countdown period
-        while break_clock.getTime() < time_limit:
+        while True:
+            if resume_rect.contains(mouse):
+                resume_rect.fillColor = (0.4, 0.7, 1)
+            else:
+                resume_rect.fillColor = (0.8, 0.8, 0.8)
+
+            if mouse.isPressedIn(resume_rect):
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+                event.clearEvents()
+                mouse.clickReset()
+                core.wait(0.2)
+
+                return
+            
             emergency_quit()
-            remaining = int(time_limit - break_clock.getTime())
+            remaining = max(0,int(time_limit - break_clock.getTime()))
 
             mins = remaining // 60
             secs = remaining % 60
 
-            text_stim.setText(
-                f"Experiment Paused\n"
-                f"Press [R] twice to continue the experiment.\n\n"
-                f"Remaining break time: {mins:02d}:{secs:02d}\n"
-                f"Long breaks used: {break_count}/{MAX_BREAK}\n"
-                f"Remaining task time: "
-                f"{remain_min:02d}:{remain_sec:02d}\n"
-                f"Press [B] to switch between Light Mode and Dark Mode.\n\n"
-                f"Keep focusing on accuracy to qualify for the Tier 1 bonus reward!\n\nCurrent performance level:"
-            )
+            if remaining > 0:
+
+                text_stim.setText(
+                    f"Experiment Paused\n"
+                    f"Remaining break time: {mins:02d}:{secs:02d}\n"
+                    f"Keep focusing on accuracy to qualify for the Tier 1 bonus reward!"
+                )
+
+            else:
+
+                text_stim.setText(
+                    "Break finished.\n\n"
+                    "Click Resume to continue.\n\n"
+                )
 
             text_stim.setHeight(45*SY)
             text_stim.alignText = 'center'
             text_stim.pos = (0, 120 * SY)
 
-            update_performance_ring()
             text_stim.draw()
-            performance_bg.draw()
-            performance_bar.draw()
 
-            tier4_text.draw()
-            tier1_text.draw()
+            resume_rect.draw()
+            resume_text.draw()
 
             win0.flip()
-
-            keys = event.getKeys()
-            for key in keys:
-                if key.lower() == 'b':
-                    dark_mode, bg_color, text_color = toggle_display_mode(dark_mode)
-                    apply_display_mode()
-
-                    event.clearEvents()
-
-                elif key.lower() == 'r':
-                    r_count += 1
-                    if r_count == 2:
-                        event.clearEvents()
-                        pause_duration = break_clock.getTime()
-                        return break_count, pause_duration
-                else:
-                    r_count = 0
-
-            core.wait(0.05)
-
-        # countdown finished
-        text_stim.setText(
-            "Time over!\n\n"
-            "Press [R] twice to continue the experiment."
-        )
-        text_stim.setHeight(72*SY)
-        text_stim.alignText = 'center'
-        text_stim.pos = (0, 0)
-        r_count = 0
-        while r_count < 2:
-            emergency_quit()
-            text_stim.draw()
-            win0.flip()
-            keys = event.getKeys()
-            for key in keys:
-                if key.lower() == 'r':
-                    r_count += 1
-                else:
-                    r_count = 0
-            core.wait(0.05)
-
-        event.clearEvents()
-
-        pause_duration = break_clock.getTime()
-        return break_count, pause_duration
+            core.wait(0.01)
+       
 
     ## ===================================================================
     ## INFO PAGE ---------------------------------------------------------
@@ -339,117 +239,179 @@ def experiment_update():
     ## === check which session is this one (do not store for now), and whether it's correct
 
     def get_verified_info():
+
         while True:
-        # 1. Information Input Stage
-            while True:
-                dlg = gui.Dlg(title="Demographics")
-            
-                if hasattr(dlg, 'labelStack'):
-                    dlg.labelStack = []
 
-                dlg.addText("Initials (e.g., sa) *")
-                dlg.addField(key='initials', label=' ', initial='') 
-            
-                dlg.addText("Age (e.g., 22) *")
-                dlg.addField(key='age', label=' ', initial='')
-            
-                dlg.addText("Gender *")
-                dlg.addField(key='gender', label=' ', choices=['Male', 'Female', 'Other'])
-            
-                dlg.addText("Current Session (1, 2, 3...) *")
-                session_choices = [str(i) for i in range(1, TOTAL_SESSION + 1)]
-                dlg.addField(key='session', label=' ', choices=session_choices)
+            # ====================================
+            # Experimenter setup
+            # ====================================
 
-                if hasattr(dlg, 'cancelButton'):
-                    dlg.cancelButton = None 
+            setup_dlg = gui.Dlg(title="Participant Setup")
 
-                dlg.show() 
-                data = dlg.data 
-            
-                if data is None or not str(data[0]).strip() or not str(data[1]).strip():
-                    err = gui.Dlg(title="Input Error")
-                    err.show()
-                    continue 
+            if hasattr(setup_dlg, 'labelStack'):
+                setup_dlg.labelStack = []
 
-                try:
-                    temp_initials = str(data[0]).upper().strip()
-                    temp_age = int(data[1]) 
-                    temp_gender = data[2]
-                    temp_sess = int(data[3])
-                    base_id = f"{temp_initials}{temp_age}{temp_gender[0]}".upper()
-                    break 
-                except (ValueError, TypeError, IndexError):
-                    err = gui.Dlg(title="Input Error")
-                    err.addText("Age must be a valid number!")
-                    err.show()
-                    continue
+            setup_dlg.addText("Participant ID *")
+            setup_dlg.addField("ID:", "")
 
-            # 2. Double Check Stage
-            conf_dlg = gui.Dlg(title="Double Check")
-            if hasattr(conf_dlg, 'labelStack'):
-                conf_dlg.labelStack = []
-            
-            conf_dlg.addText("Please check the information below:")
-            conf_dlg.addText(f"*Initials: {temp_initials}")
-            conf_dlg.addText(f"*Age: {temp_age}")
-            conf_dlg.addText(f"*Gender: {temp_gender}")
-            conf_dlg.addText(f"*Current Session: {temp_sess}")
-            conf_dlg.addText("\nClick OK to confirm, Cancel to re-type.")
-        
-            conf_dlg.show()
-            if not conf_dlg.OK:
-                continue 
+            setup_dlg.addText("Current Session *")
+            session_choices = [str(i) for i in range(1, TOTAL_SESSION + 1)]
+            setup_dlg.addField("Session:", choices=session_choices)
 
-            # 3. Logic & Session Consistency Check
-            temp_id = base_id
+            setup_dlg.show()
+
+            if not setup_dlg.OK:
+                core.quit()
+
+            subj_id = str(setup_dlg.data[0]).strip().upper()
+
+            if subj_id == "":
+                err = gui.Dlg(title="Input Error")
+                err.addText("Participant ID cannot be empty.")
+                err.show()
+                continue
+
+            temp_sess = int(setup_dlg.data[1])
+
+            # ====================================
+            # Session consistency check
+            # ====================================
+
             error_msg_text = ""
 
             if os.path.exists(FILENAME_INFO):
-                # --- Check if the BASE ID already exists ---
-                # We look for the exact base_id or any suffixed versions
-                existing_records = df_master[df_master['id'].str.startswith(base_id)]
-            
-                if not existing_records.empty:
-                    # If the user input Session 1, but this person already exists
-                    if temp_sess == 1:
-                        # Check if the exact base_id has already done session 1
-                        # We need to ask: Is this a REALLY new person with same initials, or a mistake?
-                        error_msg_text = f"ID {base_id} already exists. If you are this person, Session cannot be 1. If you are a NEW person, please alert the experimenter to add a suffix (e.g., 1_) to your initials."
-                
-                    else:
-                        # If Session > 1, we must find which specific ID (base or suffixed) 
-                        # is ready for this session (i.e., session_comp == temp_sess - 1)
-                        found_correct_id = False
-                        for _, row in existing_records.iterrows():
-                            if int(row['session_comp']) == (temp_sess - 1):
-                                temp_id = row['id']
-                                found_correct_id = True
-                                break
-                    
-                        if not found_correct_id:
-                            # Find the max session completed among all matching IDs to give a helpful hint
-                            max_comp = existing_records['session_comp'].max()
-                            error_msg_text = f"Session mismatch! For ID {base_id}, the furthest completed session is {max_comp}. You cannot start Session {temp_sess}."
-            
-                else:
-                    # Case: ID does not exist in master file at all
-                    if temp_sess != 1:
-                        error_msg_text = f"New ID detected ({base_id}), but Session is not 1! Please check your input."
-        
-            else:
-                # Case: No master file exists yet
-                if temp_sess != 1:
-                    error_msg_text = "Master file not found. First ever participant must be Session 1!"
 
-            # 4. Final Verification
-            if error_msg_text == "":
-                # Success: temp_id is now either the original or the correct suffixed one
-                return temp_id, temp_sess, temp_age, temp_gender
+                df_master_local = pd.read_csv(FILENAME_INFO)
+
+                existing_records = df_master_local[
+                    df_master_local['id'] == subj_id
+                ]
+
+                if not existing_records.empty:
+
+                    session_comp = int(
+                        existing_records.iloc[0]['session_comp']
+                    )
+
+                    expected_session = session_comp + 1
+
+                    if temp_sess != expected_session:
+
+                        error_msg_text = (
+                            f"Session mismatch!\n\n"
+                            f"Completed sessions: {session_comp}\n"
+                            f"Expected session: {expected_session}\n"
+                            f"Selected session: {temp_sess}"
+                        )
+
+                else:
+
+                    if temp_sess != 1:
+
+                        error_msg_text = (
+                            f"New ID detected ({subj_id}).\n\n"
+                            f"Session must be 1."
+                        )
+
             else:
-                # Show the specific error message
+
+                if temp_sess != 1:
+
+                    error_msg_text = (
+                        "Master file not found.\n\n"
+                        "First participant must start Session 1."
+                    )
+
+            if error_msg_text != "":
+
                 logic_err = gui.Dlg(title="Registration Error")
                 logic_err.addText(error_msg_text)
                 logic_err.show()
+
+                continue
+
+            # ====================================
+            # Participant information
+            # ====================================
+
+            while True:
+
+                dlg = gui.Dlg(title="Participant Information")
+
+                if hasattr(dlg, 'labelStack'):
+                    dlg.labelStack = []
+
+                dlg.addText(f"Participant ID: {subj_id}")
+                dlg.addText(f"Session: {temp_sess}")
+
+                dlg.addText("Age *")
+                dlg.addField(key='age', label=' ', initial='')
+
+                dlg.addText("Gender *")
+                dlg.addField(
+                    key='gender',
+                    label=' ',
+                    choices=['Male', 'Female', 'Other']
+                )
+
+                if hasattr(dlg, 'cancelButton'):
+                    dlg.cancelButton = None
+
+                dlg.show()
+
+                data = dlg.data
+
+                if data is None or not str(data[0]).strip():
+
+                    err = gui.Dlg(title="Input Error")
+                    err.addText("Age cannot be empty.")
+                    err.show()
+
+                    continue
+
+                try:
+
+                    temp_age = int(data[0])
+                    temp_gender = data[1]
+
+                except (ValueError, TypeError):
+
+                    err = gui.Dlg(title="Input Error")
+                    err.addText("Age must be a valid number.")
+                    err.show()
+
+                    continue
+
+                # ====================================
+                # Double Check
+                # ====================================
+
+                conf_dlg = gui.Dlg(title="Double Check")
+
+                if hasattr(conf_dlg, 'labelStack'):
+                    conf_dlg.labelStack = []
+
+                conf_dlg.addText("Please check the information below:")
+
+                conf_dlg.addText(f"Participant ID: {subj_id}")
+                conf_dlg.addText(f"Session: {temp_sess}")
+                conf_dlg.addText(f"Age: {temp_age}")
+                conf_dlg.addText(f"Gender: {temp_gender}")
+
+                conf_dlg.addText(
+                    "\nClick OK to confirm, Cancel to re-enter."
+                )
+
+                conf_dlg.show()
+
+                if conf_dlg.OK:
+
+                    return (
+                        subj_id,
+                        temp_sess,
+                        temp_age,
+                        temp_gender
+                    )
 
     # --- Execution ---
     subj_id, curr_sess, subj_age, subj_gender = get_verified_info()
@@ -471,19 +433,17 @@ def experiment_update():
         df_master = pd.concat([df_master, pd.DataFrame([new_record])], ignore_index=True)
         df_master.to_csv(FILENAME_INFO, index=False)
 
-    print(f'DEBUG: Subject {subj_id} is in Group {part_group}.')
+    # print(f'DEBUG: Subject {subj_id} is in Group {part_group}.')
 
     ## ===================================================================
     ## BEGIN & INSTRUCTION PAGE ------------------------------------------
     # ---------- display mode ----------
     dark_mode = False
     win0 = visual.Window(size=[1920, 1080], screen = 0, monitor='testMonitor',
-                         fullscr=True,
+                         fullscr=False,
                          winType='pyglet',
                          allowGUI=False,
                          waitBlanking=True)
-
-    win0.mouseVisible = False
 
     # ====================================
     # UI scaling
@@ -507,37 +467,13 @@ def experiment_update():
             )
     
     ## countdown objects
-    # countdown bar
-    bar_width = 1000 * SX
-    bar_height = 20 * SY
-    bar_y_pos = 350 * SY
-    countdown_bg = visual.Rect(win0, width=bar_width, height=bar_height, 
-                           pos=(0, bar_y_pos), fillColor= 'grey', 
-                           lineColor= 'grey', units='pix')
-    countdown_bar = visual.Rect(win0, width=bar_width, height=bar_height, 
-                            pos=(0, bar_y_pos), fillColor=(0.4, 0.7, 1), 
-                            lineColor=(0.4, 0.7, 1), units='pix')
             
-    text_stim_resp = visual.TextStim(win0, text=response_text,
-                            pos=(0, 200*SY), height=45*SY, units='pix', wrapWidth=screen_w * 0.9,
-                            alignText='center')
     text_stim_A = visual.TextStim(win0, text=choice_A,
                             pos=(-400*SX, -150*SY), height=50*SY, units='pix', wrapWidth=screen_w * 0.9,
                             alignText='center')
     text_stim_B = visual.TextStim(win0, text=choice_B,
                             pos=(400*SX, -150*SY), height=50*SY, units='pix', wrapWidth=screen_w * 0.9,
                             alignText='center')
-    rest_text = visual.TextStim(
-        win0,
-        text=rest_text,
-        pos=(-screen_w/2 + 30*SX,
-            screen_h/2 - 40*SY),
-        height=30*SY,
-        units='pix',
-        wrapWidth=1500*SX,
-        alignText='left',
-        anchorHoriz='left'
-    )
 
     text_stim = visual.TextStim(
     win0,
@@ -553,17 +489,19 @@ def experiment_update():
     tier4_text = visual.TextStim(
     win0,
     text="Tier 4",
-    pos=(-250*SX, -250*SY),
+    pos=(-320*SX, 340*SY),
     height=30*SY,
-    units='pix'
+    units='pix',
+    color=(-1, -1, -1)
     )
 
     tier1_text = visual.TextStim(
         win0,
         text="Tier 1",
-        pos=(250*SX, -250*SY),
+        pos=(320*SX, 340*SY),
         height=30*SY,
-        units='pix'
+        units='pix',
+        color=(-1, -1, -1)
     )
 
 
@@ -571,9 +509,9 @@ def experiment_update():
     win0,
     width=500*SX,
     height=40*SY,
-    pos=(0, -300*SY),
-    fillColor='grey',
-    lineColor='grey',
+    pos=(0, 340*SY),
+    fillColor=(0.75, 0.75, 0.75),
+    lineColor=(0.75, 0.75, 0.75),
     units='pix'
     )
 
@@ -581,61 +519,285 @@ def experiment_update():
         win0,
         width=0,
         height=40*SY,
-        pos=(-250*SX, -300*SY),
-        fillColor=(0.4, 0.7, 1),
-        lineColor=(0.4, 0.7, 1),
+        pos=(-250*SX, 340*SY),
+        fillColor=(0.55, 0.75, 0.9),
+        lineColor=(0.55, 0.75, 0.9),
         units='pix'
     )
 
-    def toggle_display_mode(dark_mode):
-        dark_mode = not dark_mode
-        if dark_mode:
-            bg_color = (-1, -1, -1)
-            text_color = (1, 1, 1)
+    # ====================================
+    # Trial Progress Bar
+    # ====================================
 
-        else:
-            bg_color = (0.8, 0.8, 0.8)
-            text_color = (-1, -1, -1)
+    trial_progress_bg = visual.Rect(
+        win0,
+        width=700 * SX,
+        height=25 * SY,
+        pos=(0, 480 * SY),
+        fillColor=(0.65, 0.65, 0.65),
+        lineColor=None,
+        units='pix'
+    )
 
-        return dark_mode, bg_color, text_color
+    trial_progress_bar = visual.Rect(
+        win0,
+        width=1,
+        height=25 * SY,
+        pos=(-350 * SX, 480 * SY),
+        fillColor=(0.4, 0.7, 1),
+        lineColor=None,
+        units='pix'
+    )
 
 
-    def apply_display_mode():
-        win0.color = bg_color
-        text_stim.color = text_color
-        text_stim_resp.color = text_color
-        text_stim_A.color = text_color
-        text_stim_B.color = text_color
-        rest_text.color = text_color
-        fixation.lineColor = text_color
-        performance_bg.lineColor = text_color
-        tier4_text.color = text_color
-        tier1_text.color = text_color
-
-    def update_performance_ring():
-        accuracy = corr_counter_session / max(1, curr_trial_sess - 1)
+    def update_performance_bar():
+        accuracy = formal_correct_count / max(1, formal_trial_count)
         progress = max(0, min((accuracy - TIER4) / (TIER1 - TIER4), 1.0))
 
         bar_width = 500 * SX * progress
 
         performance_bar.width = bar_width
-        performance_bar.pos = (-250 * SX + bar_width/2, -300 * SY)
+        performance_bar.pos = (-250 * SX + bar_width/2, 340 * SY)
 
         if accuracy >= TIER1:
-            performance_bar.fillColor = "gold"
-            performance_bar.lineColor = "gold"
+            performance_bar.fillColor = (0.85, 0.75, 0.35)
+            performance_bar.lineColor = (0.85, 0.75, 0.35)
 
         elif accuracy >= TIER2:
-            performance_bar.fillColor = "limegreen"
-            performance_bar.lineColor = "limegreen"
+            performance_bar.fillColor = (0.50, 0.75, 0.50)
+            performance_bar.lineColor = (0.50, 0.75, 0.50)
         elif accuracy >= TIER3:
-            performance_bar.fillColor = "red"
-            performance_bar.lineColor = "red"
+            performance_bar.fillColor = (0.85, 0.55, 0.55)
+            performance_bar.lineColor = (0.85, 0.55, 0.55)
         else:
-            performance_bar.fillColor = (0.4, 0.7, 1)
-            performance_bar.lineColor = (0.4, 0.7, 1)
+            performance_bar.fillColor = (0.60, 0.75, 0.90)
+            performance_bar.lineColor = (0.60, 0.75, 0.90)
 
+    ## Progress bar
+    def update_trial_progress(progress):
+
+        progress = max(0, min(progress, 1))
+
+        width_now = 700 * SX * progress
+
+        trial_progress_bar.width = max(1, width_now)
+
+        trial_progress_bar.pos = (
+            -350 * SX + width_now / 2,
+            480 * SY
+        )
+    
+    ### keyboard
     kb = keyboard.Keyboard()
+
+    ### Buttons
+    mouse = event.Mouse(
+        visible=True,
+        win=win0
+    )
+    win0.mouseVisible = True
+
+    def create_button(text,
+                  pos=(0, 0),
+                  width=220,
+                  height=70):
+
+        button_rect = visual.Rect(
+            win0,
+            width=width * SX,
+            height=height * SY,
+            pos=pos,
+            fillColor=(0.8, 0.8, 0.8),
+            lineColor=(-1, -1, -1),
+            lineWidth=2,
+            units='pix'
+        )
+
+        button_text = visual.TextStim(
+            win0,
+            text=text,
+            pos=pos,
+            height=32 * SY,
+            units='pix',
+            color=(-1, -1, -1),
+        )
+
+        return button_rect, button_text
+    
+
+    def wait_for_button(button_rect,
+                    button_text,
+                    page_text=None):
+        win0.mouseVisible = True
+        text_stim.pos = (0,0)
+        mouse.clickReset()
+
+        while True:
+
+            emergency_quit()
+
+            if page_text is not None:
+                text_stim.setText(page_text)
+                text_stim.pos = (0, 150 * SY)
+                text_stim.draw()
+            
+            button_text.color = text_color
+            button_rect.lineColor = text_color
+            
+            if button_rect.contains(mouse):
+
+                button_rect.fillColor = (0.4, 0.7, 0.1)
+
+            else:
+
+                button_rect.fillColor = (0.8, 0.8, 0.8)
+
+            button_rect.draw()
+            button_text.draw()
+
+            win0.flip()
+
+            if mouse.isPressedIn(button_rect):
+                text_stim.pos = (0, 0)
+
+                core.wait(0.2)
+
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+
+                return
+
+            core.wait(0.01)
+    
+
+    ### Choice: A/B buttons
+    A_rect, A_text = create_button(
+        "A",
+        pos=(-250 * SX, -150 * SY),
+        width=320,
+        height=120
+    )
+
+    B_rect, B_text = create_button(
+        "B",
+        pos=(250 * SX, -150 * SY),
+        width=320,
+        height=120
+    )
+
+    
+        
+    ## Instructions at the begining
+    def show_instruction_page(
+        text,
+        button_label="Next"
+    ):
+        button_width = max(260, len(button_label) * 22)
+
+        btn_rect, btn_text = create_button(
+            button_label,
+            pos=(0, -250 * SY),
+            width=button_width
+        )
+
+        wait_for_button(
+            btn_rect,
+            btn_text,
+            text,
+        )
+
+
+    def next_trial_page(in_warmup):
+        win0.mouseVisible = True
+
+        nonlocal break_used
+
+        next_rect, next_text = create_button(
+            "Next Trial",
+            pos=(0, 0),
+            width=280,
+            height=80
+        )
+
+        if not break_used and not in_warmup:
+
+            break_rect, break_text = create_button(
+                "Take Break",
+                pos=(-750*SX, 450*SY),
+                width=280,
+                height=80
+            )
+
+        page_clock = core.Clock()
+
+        mouse.clickReset()
+
+        while page_clock.getTime() < 3:
+
+            emergency_quit()
+            if not in_warmup:
+                update_performance_bar()
+
+                text_stim.setText("Current performance level")
+                text_stim.pos = (0, 220 * SY)
+                text_stim.height = 40 * SY
+
+                text_stim.draw()
+
+                performance_bg.draw()
+                performance_bar.draw()
+
+                tier4_text.draw()
+                tier1_text.draw()
+                        # ---------- Next button ----------
+            if next_rect.contains(mouse):
+                next_rect.fillColor = (0.4, 0.7, 1)
+            else:
+                next_rect.fillColor = (0.8, 0.8, 0.8)
+
+            next_rect.draw()
+            next_text.draw()
+
+            # ---------- Break button ----------
+            if not break_used and not in_warmup:
+
+                if break_rect.contains(mouse):
+                    break_rect.fillColor = (0.4, 0.7, 1)
+                else:
+                    break_rect.fillColor = (0.8, 0.8, 0.8)
+
+                break_rect.draw()
+                break_text.draw()
+
+            win0.flip()
+
+            # ---------- Next ----------
+            if mouse.isPressedIn(next_rect):
+
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+
+                return
+
+            # ---------- Break ----------
+            if (not break_used
+                    and not in_warmup
+                    and mouse.isPressedIn(break_rect)):
+
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+
+                run_break()
+
+                break_used = True
+
+                return
+
+            core.wait(0.01)
+
+
+
+    ### probe
     probe = sound.Sound(
         value=np.zeros(int(44100 * 0.3), dtype=np.float32),
         stereo=True,
@@ -643,66 +805,56 @@ def experiment_update():
     )
 
 
-    # ---------- instruction pages ----------
-
-    instruction_pages = [
-        Instruction_1,
-        Instruction_2,
-        Instruction_3,
-        Instruction_4,
-        Instruction_5,
-        Instruction_6,
-        Instruction_7,
-        Instruction_8
-    ]
-
     # ---------- default mode ----------
 
     bg_color = (0.8, 0.8, 0.8)
     text_color = (-1, -1, -1)
-    apply_display_mode()
-
     win0.color = bg_color
     text_stim.color = text_color
     event.clearEvents()
-    page_idx = 0
-    while page_idx < len(instruction_pages):
-        emergency_quit() # experimenter emergency quit: Ctrl + Shift + Q
-        
-        # current instruction page
-        text_stim.setText(instruction_pages[page_idx])
-        win0.color = bg_color
-        text_stim.color = text_color
-        text_stim.draw()
-        win0.flip()
-        keys = event.getKeys(keyList=['space', 'b'])
-        # next page
-        if 'space' in keys:
-            page_idx += 1
-            event.clearEvents()
-            core.wait(0.15)
-        # toggle dark/light mode
-        elif 'b' in keys:
-            dark_mode, bg_color, text_color = toggle_display_mode(dark_mode)
-            apply_display_mode()
-            event.clearEvents()
+    show_instruction_page(
+        "Welcome!\n\n"
+        "In this experiment, you will hear sounds and make choices by clicking either Button A or Button B.\n"
+        "You will receive feedback after each response. ",
+        "Next"
+    )
+
+    show_instruction_page(
+        "Your goal is to make as many correct responses as possible.\n\n"
+        "Please pay attention throughout the experiment. "
+        "If your performance is too low, the experiment may be paused automatically. ",
+        "Next"
+    )
+
+    show_instruction_page(
+        "During the experiment, you can click [Next Trial] to start the next trial immediately.\n\n"
+        "If you do not click the button, the next trial will start automatically after a short delay. ",
+        "Next"
+    )
+
+    if curr_sess == 1:
+        show_instruction_page(
+            "You will first complete 30 warm-up trials.\n\n"
+            "Please respond as accurately as possible.",
+            "Start Warm-up"
+        )
+    else:
+
+        show_instruction_page(
+            "Click the button below when you are ready to begin.\n\n"
+            "You can choose to take ONE 5-minute break during the experiment. "
+            "Try to make as many correct responses as possible and get the highest tier reward!",
+            "Start Experiment"
+        )
+
+
     # ---------- keep selected theme ----------
     win0.color = bg_color
     text_stim.color = text_color
     fixation.lineColor = text_color
-    text_stim_resp.color = text_color
     text_stim_A.color = text_color
     text_stim_B.color = text_color
-    text_stim_B.color = text_color
-    rest_text.color = text_color
     event.clearEvents()
-
-    # ====================================
-    # Experiment timer
-    # ====================================
-
-    experiment_clock = core.Clock()
-    experiment_clock.reset()
 
     ## =========================================================================
     ## SESSION CONDITIONS -------------------------------------------------------
@@ -713,9 +865,9 @@ def experiment_update():
 
     ### feedback images setting
     img_correct = visual.ImageStim(win0, image=img_correct_path, 
-                                   size=(500*SX, 500*SY), units='pix')
+                                   size=(250*SX, 250*SY),  pos=(0, 150*SY), units='pix')
     img_incorrect = visual.ImageStim(win0, image=img_wrong_path, 
-                                     size=(500*SX, 500*SY), units='pix')
+                                     size=(250*SX, 250*SY),  pos=(0, 150*SY), units='pix')
 
     # BLOCK ARRANGEMENT
     curr_block_arr, curr_total_block = block_size(part_group)
@@ -731,14 +883,10 @@ def experiment_update():
         curr_total_block+= 1 # add a training 'block'
         curr_block_arr.insert(0, 30)
         train = True
+    main_trial_counter = 0
     
     finish = False
     last_trial = False
-    # side rule
-    if part_no % 2 == 0:
-        side_rule = 0 # A for lower amp correct
-    else:
-        side_rule = 1 # A for higher amp correct
 
     ## =========================================================================
     ## MAIN LOOP
@@ -787,24 +935,50 @@ def experiment_update():
         easy_threshold = df_block_sample['Easy_threshold'].iloc[0]
 
         for trial_no in range(1, curr_block_arr[block_no-1] + 1):
-            effective_time = task_time
 
-            if task_time >= TOTAL_TIME:
-                finish = True
-                break
             event.clearEvents()
             ### update file info
             updated_exp_time = datetime.today().strftime('%H%M%S')
             updated_blk_trial = trial_no # current trial in block
             curr_trial_sess += 1
+            if not (train and block_no == 1):
+                main_trial_counter += 1
+            if train and block_no == 1:
+
+                # Warm-up
+                progress = (trial_no / 30)
+
+            else:
+
+                # Main Experiment
+                progress = (main_trial_counter / FORMAL_TRIAL_NUMBER)
 
             trial_finished = False
+            button_layout = randint(0, 1)
             while not trial_finished:
-            
+                ### button layout
+                if button_layout == 0:
+                    A_rect.pos = (-250 * SX, -150 * SY)
+                    A_text.pos = (-250 * SX, -150 * SY)
+
+                    B_rect.pos = (250 * SX, -150 * SY)
+                    B_text.pos = (250 * SX, -150 * SY)
+
+                else:
+
+                    A_rect.pos = (250 * SX, -150 * SY)
+                    A_text.pos = (250 * SX, -150 * SY)
+
+                    B_rect.pos = (-250 * SX, -150 * SY)
+                    B_text.pos = (-250 * SX, -150 * SY)
+                
+
                 ### fixation
+                core.wait(PRE_FIXATION)
                 fixation.draw()
                 win0.flip()
                 core.wait(fixation_duration)
+                core.wait(POST_FIXATION)
 
                 ### Listen
                 #### set stimulus amplitude
@@ -814,188 +988,120 @@ def experiment_update():
                 updated_logical_value = logical_values.iloc[trial_no-1]
                 distance = distances.iloc[trial_no-1]
                 true_cat = corr_sides.iloc[trial_no-1]
-                # play
-                signal = calibration.generate_white_noise(playback_volume, duration=0.3)
-                probe.setSound(signal) # use the same noise in calibration
-                probe.play()
-                sound_clock = core.Clock()
-                paused = False
-                while sound_clock.getTime() < probe.getDuration():
-                        emergency_quit()
-                        keys = event.getKeys()
+                # prepare stimulus
+                signal = calibration.generate_white_noise(
+                    playback_volume,
+                    duration=0.3
+                )
 
-                        if 'escape' in keys:
-                            try:
-                                probe.stop()
-                            except:
-                                pass
-                            choice = choose_break_type(break_count)
-                            break_count, pause_duration = run_break(choice, int(TOTAL_TIME - effective_time), break_count)
-                            total_pause_time += pause_duration
-                            paused = True
-                            event.clearEvents()
-                            break
-
-                if paused:
-                    continue
+                probe.setSound(signal)
 
                 ### Respond
                 resp_clock = core.Clock()
+
+                stim_started = False
                 event.clearEvents()
                 updated_sub_response = -1
-                updated_feed = 0
+                updated_feed = -1
                 rt = -1
                 responded = False
+               
                 while resp_clock.getTime() < response_limit:
+                    if not stim_started:
+                        probe.play()
+                        stim_started = True
+
+                    win0.mouseVisible = True
                     emergency_quit()
-                    time_left = response_limit - resp_clock.getTime()
-                    ratio = max(0, time_left / response_limit)
-                    new_width = bar_width * ratio
-                    countdown_bar.width = new_width
-                    countdown_bar.pos = (-(bar_width - new_width) / 2, bar_y_pos)
-                    countdown_bg.draw()
-                    countdown_bar.draw()
 
-                    text_stim_resp.draw()
-                    text_stim_A.draw()
-                    text_stim_B.draw()
-                    rest_text.draw()
-                    win0.flip()
+                    # A hover
+                    if A_rect.contains(mouse):
 
-                    keys = event.getKeys(timeStamped=resp_clock)
-                    if keys:
-                        for key_name, key_time in keys:
-                            # ====================================
-                            # BREAK
-                            # ====================================
+                        A_rect.fillColor = (0.4, 0.7, 0.1)
 
-                            if key_name == 'escape':
-                                try:
-                                    probe.stop()
-                                except:
-                                    pass
-                                remain_time = int(TOTAL_TIME - effective_time)
-                                choice = choose_break_type(break_count)
-                                break_count, pause_duration = run_break(choice, int(TOTAL_TIME - effective_time), break_count)
-                                total_pause_time += pause_duration
-                                paused = True
-                                event.clearEvents()
-                                break
+                    else:
 
-                            # ====================================
-                            # response handling
-                            # ====================================
+                        A_rect.fillColor = (0.8, 0.8, 0.8)
 
-                            if key_name not in ['s', 'k']:
-                                continue
+                    # B hover
+                    if B_rect.contains(mouse):
 
-                            rt = key_time
-                            trial_resp += 1
-                            trial_resp_blk += 1
+                        B_rect.fillColor = (0.4, 0.7, 0.1)
 
-                            if key_name == 's':
+                    else:
 
-                                updated_sub_response = 0
+                        B_rect.fillColor = (0.8, 0.8, 0.8)
+                
+                    update_trial_progress(progress)
+                    trial_progress_bg.draw()
+                    trial_progress_bar.draw()
+                    A_rect.draw()
+                    A_text.draw()
 
-                                if true_cat == 0: # low intensity
+                    B_rect.draw()
+                    B_text.draw()
+                    win0.flip() 
 
-                                    if side_rule == 0: # low left; high right
+                    # mouse response
+                    if mouse.isPressedIn(A_rect):
 
-                                        print('DEBUG: Subject Correct.')
-                                        updated_feed = 1
-                                        corr_counter_block += 1
-                                        corr_counter_session += 1
+                        rt = resp_clock.getTime()
 
-                                    else: # low right, high left
+                        updated_sub_response = 0
 
-                                        print('DEBUG: Subject Incorrect.')
-                                        updated_feed = 0
+                        responded = True
 
-                                elif true_cat == 1: # high intensity
+                        break
 
-                                    if side_rule == 0: # low left; high right
+                    elif mouse.isPressedIn(B_rect):
 
-                                        print('DEBUG: Subject Incorrect.')
-                                        updated_feed = 0
+                        rt = resp_clock.getTime()
 
-                                    else: # low right, high left
+                        updated_sub_response = 1
 
-                                        print('DEBUG: Subject Correct.')
-                                        updated_feed = 1
-                                        corr_counter_block += 1
-                                        corr_counter_session += 1
 
-                                print('Debug: Trial Number: %d' %(trial_no))
-                                print('Debug: A chosen.')
+                        responded = True
 
-                                responded = True
-                                recent_responses.append((updated_sub_response, updated_feed))
-                                if len(recent_responses) > 8:
-                                    recent_responses.pop(0)
-                                consecutive_timeout = 0
+                        break
 
-                                break
+                if responded:
 
-                            elif key_name == 'k':
+                    trial_resp += 1
+                    trial_resp_blk += 1
 
-                                updated_sub_response = 1 # pressed right key
+                    # A = category A
+                    if updated_sub_response == true_cat:
+                        if not (train and block_no == 1):
+                            formal_correct_count += 1
+                        updated_feed = 1
+                        corr_counter_block += 1
+                        corr_counter_session += 1
 
-                                if true_cat == 0: # low intensity
+                    else:
 
-                                    if side_rule == 0:
+                        updated_feed = 0
 
-                                        print('DEBUG: Subject Incorrect.')
-                                        updated_feed = 0
+                    recent_responses.append(
+                        (updated_sub_response, updated_feed)
+                    )
 
-                                    else:
+                    if len(recent_responses) > 8:
+                        recent_responses.pop(0)
 
-                                        updated_feed = 1
-                                        corr_counter_block += 1
-                                        corr_counter_session += 1
-
-                                        print('DEBUG: Subject Correct.')
-
-                                elif true_cat == 1: # hight intensity
-
-                                    if side_rule == 0:
-
-                                        updated_feed = 1
-                                        corr_counter_block += 1
-                                        corr_counter_session += 1
-
-                                        print('DEBUG: Subject Correct.')
-
-                                    else:
-
-                                        print('DEBUG: Subject Incorrect.')
-                                        updated_feed = 0
-
-                                print('DEBUG: Trial Number: %d' %(trial_no))
-                                print('DEBUG: B chosen.')
-
-                                responded = True
-                                recent_responses.append((updated_sub_response, updated_feed))
-                                if len(recent_responses) > 8:
-                                    recent_responses.pop(0)
-                                consecutive_timeout = 0
-
-                                break
-                        if paused or responded:
-                            break
+                    consecutive_timeout = 0   
+                    
+                
                 if rt == -1:
-                    if paused:
-                        continue
-                    updated_feed = 0
                     consecutive_timeout += 1
-                    print(f"DEBUG: Trial {trial_no} - Timed Out! Auto-switching to feedback.")
-
+                    # print(f"DEBUG: Trial {trial_no} - Timed Out! Auto-switching to feedback.")
+                if not (train and block_no == 1):
+                        formal_trial_count += 1
                 win0.flip()
                 event.clearEvents()
 
 
                 updated_output = pd.DataFrame({'ID':[subj_id],
                                 'GROUP': [part_group],
-                                'SIDE_RULE': [side_rule],
                                 'SESSION': [curr_sess],
                                 'DATE':[updated_exp_date],
                                 'TIME':[updated_exp_time],
@@ -1016,24 +1122,43 @@ def experiment_update():
                                 'TOTAL_TRIAL_INBLK': [curr_block_arr[block_no-1]],
                                 'TRIAL_SSE':[curr_trial_sess]
                                 })
+                # Highlight selected button
+                if updated_sub_response == 0:
+
+                    A_rect.fillColor = (0.4, 0.7, 1)
+                    B_rect.fillColor = (0.8, 0.8, 0.8)
+
+                elif updated_sub_response == 1:
+
+                    B_rect.fillColor = (0.4, 0.7, 1)
+                    A_rect.fillColor = (0.8, 0.8, 0.8)
 
                 ### Feedback
-                if updated_feed == 0:
-                    img_to_draw = img_incorrect
-                else:
-                    img_to_draw = img_correct
-                img_to_draw.draw()
-                win0.flip()
+                if updated_feed != -1:
 
-                core.wait(feedback)
-                task_time += fixation_duration
-                task_time += probe.getDuration()
-                task_time += feedback
+                    if updated_feed == 0:
+                        img_to_draw = img_incorrect
+                    else:
+                        img_to_draw = img_correct
 
-                if rt == -1:
-                    task_time += response_limit
-                else:
-                    task_time += rt
+                    update_trial_progress(progress)
+
+                    trial_progress_bg.draw()
+                    trial_progress_bar.draw()
+
+                    A_rect.draw()
+                    A_text.draw()
+
+                    B_rect.draw()
+                    B_text.draw()
+
+                    img_to_draw.draw()
+
+                    win0.flip()
+
+                    core.wait(feedback)
+                in_warmup = train and block_no == 1
+                next_trial_page(in_warmup)
 
                 ## count easy trial error
                 if rt != -1 and updated_feed == 0 and distance >= easy_threshold:
@@ -1054,16 +1179,8 @@ def experiment_update():
                     win0.flip()
                     core.wait(3)
                     event.clearEvents()
-                    choice = "N"
-
-                    break_count, pause_duration = run_break(
-                        choice,
-                        int(TOTAL_TIME - effective_time),
-                        break_count
-                    )
-
-                    total_pause_time += pause_duration
-
+                    run_break()
+                
                     consecutive_timeout = 0
                     recent_responses.clear()
                 
@@ -1081,16 +1198,8 @@ def experiment_update():
                     win0.flip()
                     core.wait(3)
                     event.clearEvents()
-                    choice = "N"
-
-                    break_count, pause_duration = run_break(
-                        choice,
-                        int(TOTAL_TIME - effective_time),
-                        break_count
-                    )
-
-                    total_pause_time += pause_duration
-
+                    run_break()
+                    
                     consecutive_easy_error = 0
                     recent_responses.clear()
 
@@ -1119,16 +1228,8 @@ def experiment_update():
                         win0.flip()
                         core.wait(3)
                         event.clearEvents()
-                        choice = "N"
-
-                        break_count, pause_duration = run_break(
-                            choice,
-                            int(TOTAL_TIME - effective_time),
-                            break_count
-                        )
-
-                        total_pause_time += pause_duration
-
+                        run_break()
+                      
                         recent_responses.clear()
 
                 ### Save record
@@ -1146,7 +1247,7 @@ def experiment_update():
                     for col in p_columns:
                         updated_output[col] = "---"
                     
-                    columns = ['ID','GROUP','SIDE_RULE','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                    columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
                         'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
                         'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
                         'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
@@ -1170,7 +1271,7 @@ def experiment_update():
                     updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
                     updated_output['pRT']           = last_trial['RT']
 
-                    columns = ['ID','GROUP','SIDE_RULE','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                    columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
                         'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
                         'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
                         'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
@@ -1180,7 +1281,19 @@ def experiment_update():
 
                     updated_output.to_csv(pull_file, mode='a', header=False, index=False)
                 trial_finished = True
-        
+
+        # Warm-up block finished
+
+        if train and block_no == 1:
+
+            show_instruction_page(
+                "End of Warm-up\n\n"
+                "Please prepare to begin the main experiment.\n"
+                "You can choose to take ONE 5-minute break during the experiment.\n"
+                "Ready? Let's begin!",
+                "Start"
+            )
+
         if trial_no == curr_block_arr[block_no-1]:
             last_trial= True
         
@@ -1226,7 +1339,7 @@ def create_exp_file(id,group,first_record):
     for col in p_columns:
         first_record[col] = "---"
         
-    columns = ['ID','GROUP','SIDE_RULE','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+    columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
                     'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
                     'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
                     'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
