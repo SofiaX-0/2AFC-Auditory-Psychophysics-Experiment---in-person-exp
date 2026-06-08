@@ -5,7 +5,10 @@
 '''
 2AFC Auditory Psychophysics Experiment
 ==================================================================================
-Sound stimulus template - 300ms,10ms @ 400Hz, sampleRate = 44100Hz
+Sound stimulus template -
+- For calibration: 4s calibration stimulus (10 repetitions of a fixed 400ms white-noise segment), sampleRate = 44000Hz
+- Stimuli: fixed 400ms white-noise, sampleRate = 44000Hz
+
 
 Sound amplitude: sampled from 2 distributions (hard-A and hard-B) based on: 
 
@@ -19,7 +22,7 @@ Interstimulus intervals:
         100ms pre-fixation;
         500ms fixation;
         100ms post-fixation;
-        (300ms stimulus) with up to 5000ms response window;
+        (400ms stimulus) with up to 5000ms response window;
         500ms feedback;
         up to 3000ms next-trial page
     --------------------------------
@@ -49,6 +52,7 @@ prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
 # for i, dev in enumerate(sd.query_devices()):
 #     print (i, dev['name'])
 import os
+from scipy.io.wavfile import read
 from datetime import datetime
 from random import randint
 from calibration import SimpleCalibration
@@ -439,11 +443,16 @@ def experiment_update():
     ## BEGIN & INSTRUCTION PAGE ------------------------------------------
     # ---------- display mode ----------
     dark_mode = False
-    win0 = visual.Window(size=[1920, 1080], screen = 0, monitor='testMonitor',
+    win0 = visual.Window(size=[2879,1799], screen = 0, monitor='testMonitor', # 2880*1800
                          fullscr=False,
                          winType='pyglet',
                          allowGUI=False,
                          waitBlanking=True)
+    mouse = event.Mouse(
+        visible=True,
+        win=win0
+    )
+    win0.mouseVisible = True
 
     # ====================================
     # UI scaling
@@ -591,12 +600,6 @@ def experiment_update():
     kb = keyboard.Keyboard()
 
     ### Buttons
-    mouse = event.Mouse(
-        visible=True,
-        win=win0
-    )
-    win0.mouseVisible = True
-
     def create_button(text,
                   pos=(0, 0),
                   width=220,
@@ -799,11 +802,8 @@ def experiment_update():
 
     ### probe
     probe = sound.Sound(
-        value=np.zeros(int(44100 * 0.3), dtype=np.float32),
-        stereo=True,
-        sampleRate=44100
+        "stimulus_400ms.wav"
     )
-
 
     # ---------- default mode ----------
 
@@ -815,7 +815,8 @@ def experiment_update():
     show_instruction_page(
         "Welcome!\n\n"
         "In this experiment, you will hear sounds and make choices by clicking either Button A or Button B.\n"
-        "You will receive feedback after each response. ",
+        "You will receive feedback after each response.\n"
+        "Please DO NOT change the volume during the experiment.",
         "Next"
     )
 
@@ -989,13 +990,8 @@ def experiment_update():
                 distance = distances.iloc[trial_no-1]
                 true_cat = corr_sides.iloc[trial_no-1]
                 # prepare stimulus
-                signal = calibration.generate_white_noise(
-                    playback_volume,
-                    duration=0.3
-                )
-
-                probe.setSound(signal)
-
+                probe.setVolume(playback_volume)
+                # print(f"DEBUG volume={playback_volume:.6f}")
                 ### Respond
                 resp_clock = core.Clock()
 
