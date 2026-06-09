@@ -11,6 +11,8 @@ data/
 
 results/
 
+test_sound.py
+
 
 .idea/
 .vscode/

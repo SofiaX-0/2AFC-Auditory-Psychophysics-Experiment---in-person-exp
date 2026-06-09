@@ -13,8 +13,8 @@ from psychopy import prefs
 prefs.hardware['audioLib'] = ['ptb']
 prefs.hardware['audioLatencyMode'] = 2
 # prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)' --> used in our lab
-prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
-# prefs.hardware['audioDevice'] = "Speakers (FiiO K7)" --> used in our lab
+# prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
+prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
 
 
 class SimpleCalibration:
@@ -54,9 +54,9 @@ class SimpleCalibration:
         if amplitudes is None:
             # x-axis: log10(amplitude), to get equal x intervals
             '''
-             == np.logspace(np.log10(0.001), np.log10(0.005),20)
+             == np.logspace(np.log10(0.003), np.log10(0.1),20)
             '''
-            amplitudes = np.geomspace(0.001,0.005,20).tolist()
+            amplitudes = np.geomspace(0.004,0.4,20).tolist()
 
         print("\n=== Calibration ===")
         print(f"{n_repeats} repeats")

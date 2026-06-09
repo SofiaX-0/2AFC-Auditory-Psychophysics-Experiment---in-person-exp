@@ -22,8 +22,8 @@ matplotlib.use('Agg') # Agg backend
 import matplotlib.pyplot as plt
 from sample import main_logic, get_pdf_general
 
-def sample_in_block(id, session, distribution_type, num_block, num_trials, physical_min=45, physical_max=75):
-    ###### MIN/MAX default should be changed after calibration, they are measured in dba ##############!!!!!!!!!!!!!!!!!!!!
+def sample_in_block(id, session, distribution_type, num_block, num_trials, physical_min=46, physical_max=80):
+    ###### MIN/MAX default should be changed after calibration, they are measured in dba
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
     GRAPH_PATH = os.path.join(RESULT_PATH, "graphs")
