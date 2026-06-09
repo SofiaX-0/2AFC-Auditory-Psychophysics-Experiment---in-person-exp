@@ -443,7 +443,7 @@ def experiment_update():
     ## BEGIN & INSTRUCTION PAGE ------------------------------------------
     # ---------- display mode ----------
     dark_mode = False
-    win0 = visual.Window(size=[2879,1799], screen = 0, monitor='testMonitor', # 2880*1800
+    win0 = visual.Window(size=[2560,1440], screen = 0, monitor='testMonitor', # 2560*1440 in lab
                          fullscr=False,
                          winType='pyglet',
                          allowGUI=False,
