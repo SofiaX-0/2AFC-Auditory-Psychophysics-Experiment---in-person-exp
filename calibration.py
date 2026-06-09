@@ -1,8 +1,9 @@
 """
 Sound Calibration
 generates one CSV file
+DELETE any calibration.csv file before the first run.
 """
-
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -21,104 +22,71 @@ class SimpleCalibration:
     def __init__(
         self,
         calibration_file="calibration.csv",
-        stimulus_file="calibration_4s.wav"
+        stimulus_file="calibration_4s.wav" # 4s: 10 repetitions of a fixed 400ms white-noise segment
     ):
 
         self.calibration_file = calibration_file
         self.calibration_data = None
-
         self.stimulus_file = stimulus_file
 
-        print(
-            f"Loaded stimulus: {stimulus_file}"
-        )
+        print(f"Loaded stimulus: {stimulus_file}")
 
     def measure_dBA(self, amplitude):
-
-        print(
-            f"\n=== Amplitude = {amplitude:.6f} ==="
-        )
-
-        tone = sound.Sound(
-            self.stimulus_file
-        )
-
-        tone.setVolume(
-            amplitude
-        )
-
-        print(
-            "Playing calibration stimulus..."
-        )
-
+        print(f"\n=== Amplitude = {amplitude:.6f} ===")
+        tone = sound.Sound(self.stimulus_file)
+        tone.setVolume(amplitude)
+        print("Playing calibration stimulus...")
         tone.play()
-
-        core.wait(
-            tone.getDuration()
-        )
-
-        dB = float(
-            input("Enter dB(A): ")
-        )
+        core.wait(tone.getDuration())
+        dB = float(input("Enter dB(A): "))
 
         return dB
 
     def run(
         self,
         amplitudes=None,
-        n_repeats=5
+        n_repeats=1 
     ):
         """
-        Run repeated calibration sessions.
+        Run repeated(Here only 1) calibration sessions.
         """
 
         if amplitudes is None:
-
-            amplitudes = np.geomspace(
-                0.001,
-                0.005,
-                20
-            ).tolist()
+            # x-axis: log10(amplitude), to get equal x intervals
+            '''
+             == np.logspace(np.log10(0.001), np.log10(0.005),20)
+            '''
+            amplitudes = np.geomspace(0.001,0.005,20).tolist()
 
         print("\n=== Calibration ===")
+        print(f"{n_repeats} repeats")
+        print(f"{len(amplitudes)} amplitudes per repeat")
 
-        print(
-            f"{n_repeats} repeats"
-        )
+        if os.path.exists(self.calibration_file):
 
-        print(
-            f"{len(amplitudes)} amplitudes per repeat"
-        )
+            old_df = pd.read_csv(self.calibration_file)
+            data = old_df.to_dict("records")
+            print(f"Loaded {len(old_df)} existing points.")
+            print(f"Current total points: {len(data)}")
 
-        data = []
+        else: # no existing file
 
-        fig, ax = plt.subplots(
-            figsize=(8, 6)
-        )
+            data = []
 
-        for repeat in range(
-            1,
-            n_repeats + 1
-        ):
+        fig, ax = plt.subplots(figsize=(8, 6))
 
-            print(
-                f"\n========== Repeat {repeat}/{n_repeats} =========="
-            )
+        ## read from calibration.csv
+        if len(data) > 0:
+            start_repeat = (max(row["repeat"]for row in data) + 1)
+        else:
+            start_repeat = 1
 
+        for repeat in range(start_repeat, start_repeat + n_repeats): # eg, the 2nd time to run: range(2,3) => repeat==2
+            print(f"\n========== Repeat {repeat} ==========")
             repeat_data = []
-
-            for i, amp in enumerate(
-                amplitudes,
-                1
-            ):
-
-                print(
-                    f"\nPoint {i}/{len(amplitudes)}"
-                )
-
-                dB = self.measure_dBA(
-                    amp
-                )
+            for i, amp in enumerate(amplitudes, 1):
+                print(f"\nPoint {i}/{len(amplitudes)}")
+                dB = self.measure_dBA(amp)
 
                 row = {
                     "repeat": repeat,
@@ -129,41 +97,23 @@ class SimpleCalibration:
 
                 data.append(row)
 
-                repeat_data.append(row)
+                repeat_data.append(row) # record the new round data
 
-            repeat_df = pd.DataFrame(
-                repeat_data
-            )
+            repeat_df = pd.DataFrame(repeat_data)
 
-            x = repeat_df[
-                "log_amp"
-            ].values
-
-            y = repeat_df[
-                "dBA"
-            ].values
-
-            a, b = np.polyfit(
-                x,
-                y,
-                1
-            )
-
-            x_smooth = np.linspace(
-                x.min(),
-                x.max(),
-                100
-            )
-
-            y_smooth = (
-                a * x_smooth + b
-            )
+            x = repeat_df["log_amp"].values
+            y = repeat_df["dBA"].values
+            ### FIT (for this repeat as a preview)
+            a, b = np.polyfit(x,y,1) ## y = a*x + b
+            ### PLOT SMOOTH LINE
+            x_smooth = np.linspace(x.min(),x.max(),100)
+            y_smooth = (a * x_smooth + b)
 
             ax.plot(
                 x_smooth,
                 y_smooth,
                 "--",
-                color="gray",
+                color="gray", ## gray line preview only for this repeat
                 alpha=0.5,
                 linewidth=1.5,
                 label=(
@@ -173,13 +123,7 @@ class SimpleCalibration:
                 )
             )
 
-            input(
-                "\nPress Enter to continue to next repeat..."
-            )
-
-        self.calibration_data = pd.DataFrame(
-            data
-        )
+        self.calibration_data = pd.DataFrame(data)
 
         self.calibration_data.to_csv(
             self.calibration_file,
@@ -187,88 +131,48 @@ class SimpleCalibration:
         )
 
         print("\n=== Done ===")
-
-        print(
-            f"Saved to: {self.calibration_file}"
-        )
-
+        print(f"Saved to: {self.calibration_file}")
+        ### DRAW
         self.plot(ax)
 
         return self.calibration_data
 
     def plot(self, ax=None):
-
         if self.calibration_data is None:
             return
-
         if ax is None:
-
-            fig, ax = plt.subplots(
-                figsize=(8, 6)
-            )
-
+            fig, ax = plt.subplots(figsize=(8, 6))
         else:
-
             fig = ax.figure
 
-        x = self.calibration_data[
-            "log_amp"
-        ].values
-
-        y = self.calibration_data[
-            "dBA"
-        ].values
+        x = self.calibration_data["log_amp"].values
+        y = self.calibration_data["dBA"].values
 
         ax.scatter(
             x,
             y,
             s=40,
-            c="blue",
+            c="blue", # blue dots
             alpha=0.6,
             label="Measured"
         )
 
-        a, b = np.polyfit(
-            x,
-            y,
-            1
-        )
+        a, b = np.polyfit(x,y,1)
 
         self.fit_a = a
         self.fit_b = b
+        x_smooth = np.linspace(x.min(), x.max(), 100)
+        y_smooth = (a * x_smooth + b)
+        y_pred = (a * x + b)
 
-        x_smooth = np.linspace(
-            x.min(),
-            x.max(),
-            100
-        )
+        r2 = 1 - (np.sum((y - y_pred) ** 2)/np.sum((y - np.mean(y)) ** 2))
 
-        y_smooth = (
-            a * x_smooth + b
-        )
-
-        y_pred = (
-            a * x + b
-        )
-
-        r2 = 1 - (
-            np.sum(
-                (y - y_pred) ** 2
-            )
-            /
-            np.sum(
-                (y - np.mean(y)) ** 2
-            )
-        )
-
-        print(
-            f"\nFinal R² = {r2:.4f}"
-        )
+        print(f"\nFinal R² = {r2:.4f}")
 
         ax.plot(
             x_smooth,
             y_smooth,
-            "r-",
+            "r-", # final red line
             linewidth=3,
             label=(
                 f"Final fit: "
@@ -276,24 +180,12 @@ class SimpleCalibration:
             )
         )
 
-        ax.set_xlabel(
-            "log10(Amplitude)"
-        )
-
-        ax.set_ylabel(
-            "dBA"
-        )
-
-        ax.set_title(
-            "Sound Calibration"
-        )
+        ax.set_xlabel("log10(Amplitude)")
+        ax.set_ylabel("dBA")
+        ax.set_title("Sound Calibration")
 
         ax.legend()
-
-        ax.grid(
-            True,
-            alpha=0.3
-        )
+        ax.grid(True,alpha=0.3)
 
         plot_file = (
             self.calibration_file.replace(
@@ -302,68 +194,34 @@ class SimpleCalibration:
             )
         )
 
-        fig.savefig(
-            plot_file,
-            dpi=300
-        )
-
-        print(
-            f"Plot saved: {plot_file}"
-        )
-
-        print(
-            f"dBA = {a:.4f} * log10(amplitude) + {b:.4f}"
-        )
-
-        print(
-            f"Amplitude = 10 ** ((dBA - {b:.4f}) / {a:.4f})"
-        )
+        fig.savefig(plot_file,dpi=300)
+        print(f"Plot saved: {plot_file}")
+        print(f"dBA = {a:.4f} * log10(amplitude) + {b:.4f}")
+        print(f"Amplitude = 10 ** ((dBA - {b:.4f}) / {a:.4f})")
 
         fit_file = (
             self.calibration_file.replace(
                 ".csv",
-                "_fit.txt"
+                "_fit.txt" # save a txt file
             )
         )
 
-        with open(
-            fit_file,
-            "w"
-        ) as f:
+        with open(fit_file,"w") as f:
+            f.write(f"{self.fit_a}\n")
+            f.write(f"{self.fit_b}\n")
 
-            f.write(
-                f"{self.fit_a}\n"
-            )
-
-            f.write(
-                f"{self.fit_b}\n"
-            )
-
-        print(
-            f"Calibration parameters saved to {fit_file}"
-        )
+        print(f"Calibration parameters saved to {fit_file}")
 
         plt.show()
 
-    def dba_to_amplitude(
-        self,
-        target_dba
-    ):
-
-        return 10 ** (
-            (
-                target_dba
-                - self.fit_b
-            )
-            /
-            self.fit_a
-        )
+    def dba_to_amplitude(self,target_dba):
+        return 10 ** ((target_dba - self.fit_b)/self.fit_a)
 
 
 if __name__ == "__main__":
 
     cal = SimpleCalibration(
-        "my_calibration.csv",
+        "calibration.csv",
         "calibration_4s.wav"
     )
 
