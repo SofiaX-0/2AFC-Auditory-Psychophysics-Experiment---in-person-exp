@@ -1,0 +1,39 @@
+"""
+final result: 0.004 - 0.4
+0.4  around 90dba
+0.3 around 87dba
+0.2 around 83dba
+0.15170760762929
+TO TEST CALIBRATION around 80dba
+"""
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import math
+
+from psychopy import sound, core
+from psychopy import prefs
+prefs.hardware['audioLib'] = ['ptb']
+prefs.hardware['audioLatencyMode'] = 2
+# prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)' --> used in our lab
+# prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
+prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
+
+
+def test(file, amplitude):
+        print(f"\n=== Amplitude = {amplitude:.6f} ===")
+        tone = sound.Sound(file)
+        tone.setVolume(amplitude)
+        print("Playing calibration stimulus...")
+        tone.play()
+        core.wait(tone.getDuration())
+        dB = 19.3675 * math.log10(amplitude) + 97.0546 ### change the fn here
+        print(dB)
+
+        return dB
+
+
+if __name__ == "__main__":
+    amplitude = float(input('ENTER AMP: '))
+    test('calibration_4s.wav', amplitude)
