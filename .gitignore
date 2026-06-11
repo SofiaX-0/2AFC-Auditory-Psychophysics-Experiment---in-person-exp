@@ -9,7 +9,7 @@ data/
 
 *.m
 
-results/
+calibration_plot.png
 
 test_sound.py
 
