@@ -860,7 +860,7 @@ def experiment_update():
     warmup_sound.play()
 
     core.wait(0.5)
-    
+
     # ---------- keep selected theme ----------
     win0.color = bg_color
     text_stim.color = text_color
@@ -900,6 +900,7 @@ def experiment_update():
     
     finish = False
     last_trial = False
+    probe = None
 
     ## =========================================================================
     ## MAIN LOOP
@@ -1025,9 +1026,11 @@ def experiment_update():
                 while resp_clock.getTime() < response_limit:
                     if not stim_started:
 
-                        probe = sound.Sound(
-                            "stimulus_400ms.wav"
-                        )
+                        if probe is None or curr_trial_sess % 20 == 1:
+
+                            probe = sound.Sound(
+                                "stimulus_400ms.wav"
+                            )
 
                         probe.setVolume(playback_volume)
 
