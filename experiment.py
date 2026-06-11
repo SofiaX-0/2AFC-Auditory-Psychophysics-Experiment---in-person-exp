@@ -106,7 +106,10 @@ def experiment_update():
     FILENAME_INFO = os.path.join(RESULT_PATH, "Subject_info.csv") 
   
     if os.path.exists(FILENAME_INFO):
-        df_master = pd.read_csv(FILENAME_INFO)
+        df_master = pd.read_csv(
+            FILENAME_INFO,
+            dtype={'id': str}
+        )
     else:
         df_master = pd.DataFrame(columns=['id', 'group', 'age', 'gender','session_comp'])
         df_master.to_csv(FILENAME_INFO, index=False)
@@ -267,7 +270,7 @@ def experiment_update():
             if not setup_dlg.OK:
                 core.quit()
 
-            subj_id = str(setup_dlg.data[0]).strip().upper()
+            subj_id = (str(setup_dlg.data[0]).strip().upper())
 
             if subj_id == "":
                 err = gui.Dlg(title="Input Error")
@@ -285,7 +288,10 @@ def experiment_update():
 
             if os.path.exists(FILENAME_INFO):
 
-                df_master_local = pd.read_csv(FILENAME_INFO)
+                df_master_local = pd.read_csv(
+                    FILENAME_INFO,
+                    dtype={'id': str}
+                )
 
                 existing_records = df_master_local[
                     df_master_local['id'] == subj_id
@@ -420,7 +426,10 @@ def experiment_update():
     # --- Execution ---
     subj_id, curr_sess, subj_age, subj_gender = get_verified_info()
 
-    df_master = pd.read_csv(FILENAME_INFO)
+    df_master = pd.read_csv(
+        FILENAME_INFO,
+        dtype={'id': str}
+    )
     match_row = df_master[df_master['id'] == subj_id]
     if not match_row.empty:
         part_group = int(match_row.iloc[0]['group'])
@@ -1002,7 +1011,7 @@ def experiment_update():
                     f"Block={block_no}, "
                     f"Volume={playback_volume:.6f}"
                 )
-                
+
                 updated_logical_value = logical_values.iloc[trial_no-1]
                 distance = distances.iloc[trial_no-1]
                 true_cat = corr_sides.iloc[trial_no-1]
@@ -1316,7 +1325,10 @@ def experiment_update():
 
     if finish:# INFO table,session_comp + 1
         try:
-            info_df = pd.read_csv(FILENAME_INFO)
+            info_df = pd.read_csv(
+                FILENAME_INFO,
+                dtype={'id': str}
+            )
             idx = info_df[info_df['id'] == subj_id].index
             if not idx.empty:
                 info_df.loc[idx, 'session_comp'] += 1
