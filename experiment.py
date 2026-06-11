@@ -43,7 +43,7 @@ import pandas as pd
 import numpy as np
 from psychopy import prefs
 prefs.hardware['audioLib'] = ['ptb']
-prefs.hardware['audioLatencyMode'] = 2
+prefs.hardware['audioLatencyMode'] = 3
 # prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)' --> used in our lab
 prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
 # prefs.hardware['audioDevice'] = "Speakers (FiiO K7)" --> used in our lab
@@ -151,10 +151,6 @@ def experiment_update():
     # End page
     # =========================
     def finish_experiment():
-        try:
-            probe.stop()
-        except:
-            pass
 
         text_stim.setText(
             f"Experiment Finished!\n\n"
@@ -808,12 +804,6 @@ def experiment_update():
             core.wait(0.01)
 
 
-
-    ### probe
-    probe = sound.Sound(
-        "stimulus_400ms.wav"
-    )
-
     # ---------- default mode ----------
 
     bg_color = (0.8, 0.8, 0.8)
@@ -904,13 +894,6 @@ def experiment_update():
     for block_no in range(1, curr_total_block+1):
         if finish:
             break
-
-        try:
-            probe.stop()
-        except:
-            pass
-
-        probe = sound.Sound("stimulus_400ms.wav")
 
         event.clearEvents()
         event.clearEvents()
@@ -1015,9 +998,7 @@ def experiment_update():
                 updated_logical_value = logical_values.iloc[trial_no-1]
                 distance = distances.iloc[trial_no-1]
                 true_cat = corr_sides.iloc[trial_no-1]
-                # prepare stimulus
-                probe.setVolume(playback_volume)
-                # print(f"DEBUG volume={playback_volume:.6f}")
+
                 ### Respond
                 resp_clock = core.Clock()
 
@@ -1030,8 +1011,15 @@ def experiment_update():
                
                 while resp_clock.getTime() < response_limit:
                     if not stim_started:
-                        probe.stop()
+
+                        probe = sound.Sound(
+                            "stimulus_400ms.wav"
+                        )
+
+                        probe.setVolume(playback_volume)
+
                         probe.play()
+
                         stim_started = True
 
                     win0.mouseVisible = True
@@ -1282,7 +1270,10 @@ def experiment_update():
                     print(f"DEBUG: Session {curr_sess} started. P-columns initialized with '---'.")
                     
                 else: # do not need to create a new file
-                    old_df = pd.read_csv(pull_file)
+                    old_df = pd.read_csv(
+                        pull_file,
+                        dtype={'ID': str}
+                    )
                     last_trial = old_df.iloc[-1]
                     updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
                     updated_output['pAMP']          = last_trial['AMP']
