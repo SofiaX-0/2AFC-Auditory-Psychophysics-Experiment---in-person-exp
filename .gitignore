@@ -8,7 +8,7 @@ venv/
 
 calibration_plot.png
 
-
+results/
 
 .idea/
 .vscode/
