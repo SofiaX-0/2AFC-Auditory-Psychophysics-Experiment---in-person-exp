@@ -895,6 +895,15 @@ def experiment_update():
     for block_no in range(1, curr_total_block+1):
         if finish:
             break
+
+        try:
+            probe.stop()
+        except:
+            pass
+
+        probe = sound.Sound("stimulus_400ms.wav")
+
+        event.clearEvents()
         event.clearEvents()
         trial_resp_blk = 0
         corr_counter_block = 0
@@ -986,6 +995,14 @@ def experiment_update():
                 updated_amp = amplitudes.iloc[trial_no-1]
                 playback_volume = calibration.dba_to_amplitude(updated_amp)
                 playback_volume = np.clip(playback_volume, 0.0, 1.0) # ensure it stays valid
+
+                ### DEBUG
+                print(
+                    f"Trial={curr_trial_sess}, "
+                    f"Block={block_no}, "
+                    f"Volume={playback_volume:.6f}"
+                )
+                
                 updated_logical_value = logical_values.iloc[trial_no-1]
                 distance = distances.iloc[trial_no-1]
                 true_cat = corr_sides.iloc[trial_no-1]
@@ -1004,6 +1021,7 @@ def experiment_update():
                
                 while resp_clock.getTime() < response_limit:
                     if not stim_started:
+                        probe.stop()
                         probe.play()
                         stim_started = True
 
