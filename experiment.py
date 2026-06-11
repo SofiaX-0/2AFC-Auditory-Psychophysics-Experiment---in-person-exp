@@ -847,7 +847,20 @@ def experiment_update():
             "Start Experiment"
         )
 
+    # ====================================
+    # Audio warm-up (PTB initialization)
+    # ====================================
 
+    warmup_sound = sound.Sound(
+        "stimulus_400ms.wav"
+    )
+
+    warmup_sound.setVolume(0.0)
+
+    warmup_sound.play()
+
+    core.wait(0.5)
+    
     # ---------- keep selected theme ----------
     win0.color = bg_color
     text_stim.color = text_color
