@@ -814,7 +814,7 @@ def experiment_update():
     show_instruction_page(
         "Welcome!\n\n"
         "In this experiment, you will hear sounds and make choices by clicking either Button A or Button B.\n"
-        "You will receive feedback after each response.\n"
+        "You will have some time to response and will receive feedback after each response.\n"
         "Please DO NOT change the volume during the experiment.",
         "Next"
     )
