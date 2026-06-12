@@ -14,11 +14,17 @@ import math
 
 from psychopy import sound, core
 from psychopy import prefs
+
+# import sounddevice as sd
+# print('sound device:', sd.default.device)
+# for i, dev in enumerate(sd.query_devices()):
+#     print (i, dev['name'])
+
+
 prefs.hardware['audioLib'] = ['ptb']
-prefs.hardware['audioLatencyMode'] = 2
-# prefs.hardware['audioDevice'] = 'Speakers (8- US-4x4)' --> used in our lab
+prefs.hardware['audioLatencyMode'] = 3
 # prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
-prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
+# prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
 
 
 def test(file, amplitude):
