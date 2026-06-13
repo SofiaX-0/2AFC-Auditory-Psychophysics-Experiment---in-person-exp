@@ -3,7 +3,7 @@ final result: 0.004 - 0.4
 0.4  around 90dba
 0.3 around 87dba
 0.2 around 83dba
-0.15170760762929
+0.15170760762929 aroun 80dba
 TO TEST CALIBRATION around 80dba
 """
 import os
@@ -24,7 +24,7 @@ from psychopy import prefs
 prefs.hardware['audioLib'] = ['ptb']
 prefs.hardware['audioLatencyMode'] = 3
 # prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
-# prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
+prefs.hardware['audioDevice'] = "Speakers (2- FiiO K7)"
 
 
 def test(file, amplitude):
