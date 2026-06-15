@@ -900,8 +900,7 @@ def experiment_update():
             
             "You will receive a bonus payment if your overall accuracy across all sessions exceeds 75%. The higher your accuracy, the larger the bonus payment.\n"
             "A performance bar will be displayed as a reference, indicating your current accuracy tier.\n"
-            "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n"
-            "If your final bonus is negative, it will be set to zero and you will get the base payment.\n\n"
+            "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n\n"
             "Click the button below when you are ready to begin.",
     
             "Start Experiment"
@@ -1398,8 +1397,7 @@ def experiment_update():
             show_instruction_page(
                 "You will receive a bonus payment if your overall accuracy across all sessions exceeds 75%. The higher your accuracy, the larger the bonus payment.\n"
                 "A performance bar will be displayed as a reference, indicating your current accuracy tier. \n"
-                "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n"
-                "If your final bonus is negative, it will be set to zero and you will get the base payment.",
+                "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n",
 
                 "Next"
             )
@@ -1489,7 +1487,7 @@ def experiment_update():
 
                 core.wait(15)
 
-            finish_experiment()
+        finish_experiment()
 
         
     
