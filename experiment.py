@@ -30,11 +30,13 @@ Interstimulus intervals:
 
 Number of sessions: 5; extra sessions 6-7 available
 Number of trials:
-    Session 1: 30 warm-up + 600 formal trials
-    Session 2-7: 600 formal trials
+    Session 1: 30 warm-up + 1200 formal trials
+    Session 2-7: 1200 formal trials
 Number of subject groups: 2
 -> group 1: block size: [40-60]
 -> group 2: block size: [150-250]
+Number of breaks:
+(optional) 6 - one break lasts for 4 minutes
 
 ===============================================================================    
 '''
@@ -87,7 +89,7 @@ def experiment_update():
     '''
     ## basic settings
     TOTAL_SESSION = 7
-    FORMAL_TRIAL_NUMBER = 600
+    FORMAL_TRIAL_NUMBER = 1200
     response_limit = 5
     fixation_duration = 0.5
     feedback = 0.5
@@ -99,7 +101,7 @@ def experiment_update():
     TIER1 = 0.95
     TIER2 = 0.90
     TIER3 = 0.80
-    TIER4 = 0.70
+    TIER4 = 0.75
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
     os.makedirs(RESULT_PATH, exist_ok=True) # create results folder if not exists
@@ -146,6 +148,7 @@ def experiment_update():
 
         if pressed:
             finish_experiment()
+            
 
     # =========================
     # End page
@@ -169,7 +172,8 @@ def experiment_update():
     # =========================
     # break settings
     # =========================
-    break_used = False
+    break_count = 0
+    MAX_BREAKS = 6
 
     # ============================================================
     # BREAK FUNCTION
@@ -183,7 +187,7 @@ def experiment_update():
             height=80
         )
         break_clock = core.Clock()
-        time_limit = 5 * 60
+        time_limit = 4 * 60
 
         # countdown period
         while True:
@@ -695,7 +699,7 @@ def experiment_update():
 
     
         
-    ## Instructions at the begining
+    ## Instructions at the beginning
     def show_instruction_page(
         text,
         button_label="Next"
@@ -718,8 +722,6 @@ def experiment_update():
     def next_trial_page(in_warmup):
         win0.mouseVisible = True
 
-        nonlocal break_used
-
         next_rect, next_text = create_button(
             "Next Trial",
             pos=(0, 0),
@@ -727,10 +729,10 @@ def experiment_update():
             height=80
         )
 
-        if not break_used and not in_warmup:
+        if break_count < MAX_BREAKS and not in_warmup:
 
             break_rect, break_text = create_button(
-                "Take Break",
+                f"Take Break ({MAX_BREAKS-break_count} left)",
                 pos=(-750*SX, 450*SY),
                 width=280,
                 height=80
@@ -767,7 +769,7 @@ def experiment_update():
             next_text.draw()
 
             # ---------- Break button ----------
-            if not break_used and not in_warmup:
+            if break_count < MAX_BREAKS and not in_warmup:
 
                 if break_rect.contains(mouse):
                     break_rect.fillColor = (0.4, 0.7, 1)
@@ -788,7 +790,7 @@ def experiment_update():
                 return
 
             # ---------- Break ----------
-            if (not break_used
+            if (break_count < MAX_BREAKS
                     and not in_warmup
                     and mouse.isPressedIn(break_rect)):
 
@@ -797,7 +799,7 @@ def experiment_update():
 
                 run_break()
 
-                break_used = True
+                break_count += 1
 
                 return
 
@@ -814,20 +816,20 @@ def experiment_update():
     show_instruction_page(
         "Welcome!\n\n"
         "In this experiment, you will hear sounds and make choices by clicking either Button A or Button B.\n"
-        "You will have some time to response and will receive feedback after each response.\n"
-        "Please DO NOT change the volume during the experiment.",
+        "You will have a few seconds to respond and will receive feedback after each response.\n"
+        "Please refrain from using the keyboard during the experiment unless you wish to quit the experiment entirely.",
         "Next"
     )
 
     show_instruction_page(
-        "Your goal is to make as many correct responses as possible.\n\n"
+        "Your goal is to make as many correct responses as possible.\n"
         "Please pay attention throughout the experiment. "
         "If your performance is too low, the experiment may be paused automatically. ",
         "Next"
     )
 
     show_instruction_page(
-        "During the experiment, you can click [Next Trial] to start the next trial immediately.\n\n"
+        "During the experiment, you can click [Next Trial] to start the next trial immediately.\n"
         "If you do not click the button, the next trial will start automatically after a short delay. ",
         "Next"
     )
@@ -841,11 +843,32 @@ def experiment_update():
     else:
 
         show_instruction_page(
-            "Click the button below when you are ready to begin.\n\n"
-            "You can choose to take ONE 5-minute break during the experiment. "
-            "Try to make as many correct responses as possible and get the highest tier reward!",
+            "The task follows the same rules as in the previous sessions. Your goal is to increase your accuracy rate!\n"
+            "The task will last for around 50-90 minutes, excluding 6 optional short breaks.\n"
+            "Please note that the experimenter will monitor the session throughout the experiment.\n",
+            "Next"
+        )
+
+        show_instruction_page(
+            
+            "You will receive a bonus payment if your overall accuracy across all sessions exceeds 75%. The higher your accuracy, the larger the bonus payment.\n"
+            "A performance bar will be displayed as a reference, indicating your current accuracy tier.\n"
+            "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n"
+            "If your final bonus is negative, it will be set to zero and you will get the base payment.\n\n"
+            "Click the button below when you are ready to begin.",
+    
             "Start Experiment"
         )
+
+        show_instruction_page(
+            "If this session exceeds 95 minutes, the experimenter will inform you and stop the experiment.\n"
+            "Don't worry! If this happens, any unanswered trials at the end of the session will not affect your bonus payment.\n"
+            "If an emergency occurs, you may terminate the experiment at any time by pressing [F12].\n\n"
+            "Click the button below when you are ready to begin.",
+    
+            "Start Experiment"
+        )
+
 
     # ====================================
     # Audio warm-up (PTB initialization)
@@ -1319,10 +1342,30 @@ def experiment_update():
             show_instruction_page(
                 "End of Warm-up\n\n"
                 "Please prepare to begin the main experiment.\n"
-                "You can choose to take ONE 5-minute break during the experiment.\n"
-                "Ready? Let's begin!",
-                "Start"
+                "The task will last for around 50-90 minutes, excluding 6 optional short breaks.\n"
+                "Please note that the experimenter will monitor the session throughout the experiment.\n\n",
+                "Next"
             )
+
+
+            show_instruction_page(
+                "You will receive a bonus payment if your overall accuracy across all sessions exceeds 75%. The higher your accuracy, the larger the bonus payment.\n"
+                "A performance bar will be displayed as a reference, indicating your current accuracy tier. \n"
+                "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n"
+                "If your final bonus is negative, it will be set to zero and you will get the base payment.",
+
+                "Next"
+            )
+
+            show_instruction_page(
+            "If this session exceeds 95 minutes, the experimenter will inform you and stop the experiment.\n"
+            "Don't worry! If this happens, any unanswered trials at the end of the session will not affect your bonus payment.\n"
+            "If an emergency occurs, you may terminate the experiment at any time by pressing [F12].\n\n"
+            "Click the button below when you are ready to begin.",
+    
+            "Start Experiment"
+            )
+
 
         if trial_no == curr_block_arr[block_no-1]:
             last_trial= True
@@ -1350,6 +1393,7 @@ def experiment_update():
             print(f"An error occurred: {e}")
 
         finish_experiment()
+        
     
         ########################################################################################
 

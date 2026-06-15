@@ -15,13 +15,13 @@ def block_size(group):
     group: 0 - short blocks group; 1 - long blocks group
     Methods:
     Generates N different block sizes (b1, b2... bN)
-    Sum of bi = 600
+    Sum of bi = 1200
     Group 0: N = 12, bi= [40,60]
     Group 1: N = 3, bi=[150,250];
 
     B. return the block size arrangement, ready to be written into the main csv doc. 
     '''
-    target_sum = 600 # total trial number
+    target_sum = 1200 # total trial number
     max_attempts = 1000 # attempts to find series
 
     if group == 0: # short-block group
