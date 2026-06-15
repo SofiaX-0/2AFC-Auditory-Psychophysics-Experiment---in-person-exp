@@ -103,6 +103,11 @@ def experiment_update():
     TIER2 = 0.90
     TIER3 = 0.80
     TIER4 = 0.75
+
+    MAX_BONUS = 50
+    BONUS_THRESHOLD = 0.75
+    BONUS_SESSION = 5 ## change if there are extra sessions
+
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # get current path of this script
     RESULT_PATH = os.path.join(SCRIPT_DIR, "results")
     os.makedirs(RESULT_PATH, exist_ok=True) # create results folder if not exists
@@ -114,7 +119,7 @@ def experiment_update():
             dtype={'id': str}
         )
     else:
-        df_master = pd.DataFrame(columns=['id', 'group', 'age', 'gender','session_comp'])
+        df_master = pd.DataFrame(columns=['id', 'group', 'age', 'gender','session_comp', 'final_accuracy', 'final_bonus'])
         df_master.to_csv(FILENAME_INFO, index=False)
     
     ## feedback images
@@ -154,6 +159,44 @@ def experiment_update():
     # =========================
     # End page
     # =========================
+    ## calculate bonus reward
+    def calculate_final_bonus():
+
+        file_name = f"{subj_id}_{part_group}.csv"
+        pull_file = os.path.join(RESULT_PATH, file_name)
+
+        if not os.path.exists(pull_file):
+            return None, None
+
+        df = pd.read_csv(
+            pull_file,
+            dtype={'ID': str}
+        )
+
+        # only first 5 sessions
+        df = df[
+            (df["SESSION"] <= BONUS_SESSION)
+            &
+            (df["DISTRIBUTION"] != 0)
+        ]
+
+        if len(df) == 0:
+            return None, None
+
+        correct = (df["FEEDBACK"] == 1).sum()
+
+        accuracy = correct / len(df)
+
+        if accuracy < BONUS_THRESHOLD:
+            bonus = 0
+
+        else:
+            bonus = (1 + (MAX_BONUS - 1) * (accuracy - BONUS_THRESHOLD)/ (1 - BONUS_THRESHOLD))
+            bonus = min(MAX_BONUS, bonus)
+
+        return accuracy, bonus
+
+
     def finish_experiment():
 
         text_stim.setText(
@@ -442,7 +485,9 @@ def experiment_update():
             'group': part_group, 
             'age': subj_age,
             'gender': subj_gender,
-            'session_comp': 0
+            'session_comp': 0,
+            'final_accuracy': np.nan,
+            'final_bonus': np.nan
         }
         df_master = pd.concat([df_master, pd.DataFrame([new_record])], ignore_index=True)
         df_master.to_csv(FILENAME_INFO, index=False)
@@ -1393,8 +1438,59 @@ def experiment_update():
             print(f"ERROR: Info file {FILENAME_INFO} not found. Cannot update session count.")
         except Exception as e:
             print(f"An error occurred: {e}")
+        
+            # show bonus after Session 5
+        if curr_sess == BONUS_SESSION:
 
-        finish_experiment()
+            accuracy, bonus = calculate_final_bonus()
+
+            if accuracy is not None:
+
+                info_df = pd.read_csv(
+                    FILENAME_INFO,
+                    dtype={'id': str}
+                )
+
+                idx = info_df[
+                    info_df['id'] == subj_id
+                ].index
+
+                if not idx.empty:
+
+                    info_df.loc[idx, 'final_accuracy'] = round(
+                        accuracy * 100,
+                        2
+                    )
+
+                    info_df.loc[idx, 'final_bonus'] = round(
+                        bonus,
+                        2
+                    )
+
+                    info_df.to_csv(
+                        FILENAME_INFO,
+                        index=False,
+                        encoding='utf-8-sig'
+                    )
+
+                text_stim.setHeight(60 * SY)
+
+                text_stim.setText(
+                    f"Experiment Finished!\n\n"
+                    f"Overall Accuracy (Sessions 1-5): "
+                    f"{accuracy*100:.1f}%\n\n"
+                    f"Bonus Earned: £{bonus:.2f}\n\n"
+                    f"Thank you for your participation."
+                )
+
+                text_stim.draw()
+
+                win0.flip()
+
+                core.wait(15)
+
+            finish_experiment()
+
         
     
         ########################################################################################
