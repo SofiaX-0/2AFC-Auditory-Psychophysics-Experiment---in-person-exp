@@ -25,10 +25,10 @@ def block_size(group):
     max_attempts = 1000 # attempts to find series
 
     if group == 0: # short-block group
-        N = 12 # N: number of blocks
+        N = 24 # N: number of blocks
         b_min, b_max = 40, 60
     else:
-        N = 3
+        N = 6
         b_min, b_max = 150, 250
     
     # Try to generate series that satisfy constraints
