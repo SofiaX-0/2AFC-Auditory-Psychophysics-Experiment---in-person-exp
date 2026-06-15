@@ -48,7 +48,8 @@ prefs.hardware['audioLib'] = ['ptb']
 prefs.hardware['audioLatencyMode'] = 3
 
 # prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
-prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
+# prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
+prefs.hardware['audioDevice'] = "Speakers (2- FiiO K7)" # ALSO CHANGE IN CALIBRATION
 # import sounddevice as sd
 # print('sound device:', sd.default.device)
 # for i, dev in enumerate(sd.query_devices()):
@@ -216,7 +217,7 @@ def experiment_update():
                 text_stim.setText(
                     f"Experiment Paused\n"
                     f"Remaining break time: {mins:02d}:{secs:02d}\n"
-                    f"Keep focusing on accuracy to qualify for the Tier 1 bonus reward!"
+                    f"Keep focusing on accuracy to qualify for higher bonus reward!"
                 )
 
             else:
@@ -721,6 +722,7 @@ def experiment_update():
 
     def next_trial_page(in_warmup):
         win0.mouseVisible = True
+        nonlocal break_count
 
         next_rect, next_text = create_button(
             "Next Trial",
