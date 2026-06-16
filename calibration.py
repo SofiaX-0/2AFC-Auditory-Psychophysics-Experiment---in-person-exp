@@ -13,9 +13,9 @@ from psychopy import prefs
 prefs.hardware['audioLib'] = ['ptb']
 prefs.hardware['audioLatencyMode'] = 2
 
-# prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
+prefs.hardware['audioDevice'] = "扬声器 (Realtek(R) Audio)"
 # prefs.hardware['audioDevice'] = "Speakers (FiiO K7)"
-prefs.hardware['audioDevice'] = "Speakers (2- FiiO K7)" # ALSO CHANGE IN CALIBRATION
+# prefs.hardware['audioDevice'] = "Speakers (2- FiiO K7)" # ALSO CHANGE IN CALIBRATION
 
 
 class SimpleCalibration:

@@ -98,11 +98,6 @@ def experiment_update():
     POST_FIXATION = 0.1
     AUTO_TIMEOUT_THRESHOLD = 3
     AUTO_EASY_ERROR_THRESHOLD = 3
-    # bonus tier
-    TIER1 = 0.95
-    TIER2 = 0.90
-    TIER3 = 0.80
-    TIER4 = 0.75
 
     MAX_BONUS = 50
     BONUS_THRESHOLD = 0.75
@@ -130,6 +125,7 @@ def experiment_update():
     choice_B = "B"
     
     ### initialization
+    subj_id = ""
     curr_sess = 0
     trial_resp = 0 # number of trials with a response in the whole session
     trial_resp_blk = 0 # number of trials with a response in current block
@@ -138,6 +134,9 @@ def experiment_update():
     corr_counter_session = 0
     formal_trial_count = 0
     formal_correct_count = 0
+    training_trial_count = 0
+    training_correct_count = 0
+    block_no = 1
     # pause automatically when subject is not paying attention
     consecutive_timeout = 0
     consecutive_easy_error = 0
@@ -153,48 +152,67 @@ def experiment_update():
         )
 
         if pressed:
-            finish_experiment()
+            handle_session_completion()
             
 
     # =========================
     # End page
     # =========================
     ## calculate bonus reward
-    def calculate_final_bonus():
-
+    def calculate_payments():
         file_name = f"{subj_id}_{part_group}.csv"
         pull_file = os.path.join(RESULT_PATH, file_name)
 
         if not os.path.exists(pull_file):
-            return None, None
+            return 0.0, 0.0, 0.0, 0.0
 
-        df = pd.read_csv(
-            pull_file,
-            dtype={'ID': str}
-        )
-
-        # only first 5 sessions
-        df = df[
-            (df["SESSION"] <= BONUS_SESSION)
-            &
-            (df["DISTRIBUTION"] != 0)
-        ]
-
-        if len(df) == 0:
-            return None, None
-
-        correct = (df["FEEDBACK"] == 1).sum()
-
-        accuracy = correct / len(df)
-
-        if accuracy < BONUS_THRESHOLD:
-            bonus = 0
-
+        df = pd.read_csv(pull_file, dtype={'ID': str})
+        
+        # Calculate standard payment for each session (1-5)
+        total_standard_payment = 0.0
+        session_trial_counts = []
+        
+        for s in range(1, 6):
+            sess_df = df[(df["SESSION"] == s) & (df["DISTRIBUTION"] != 0)]
+            n_trials = len(sess_df)
+            session_trial_counts.append(n_trials)
+            if n_trials > 0:
+                n_correct = (sess_df["FEEDBACK"] == 1).sum()
+                sess_acc = n_correct / n_trials
+                if sess_acc > 0.50 and n_trials >= 600:
+                    total_standard_payment += 15.0
+                    
+        # Calculate overall accuracy for sessions 1-5
+        formal_df = df[(df["SESSION"] <= 5) & (df["DISTRIBUTION"] != 0)]
+        if len(formal_df) > 0:
+            overall_correct = (formal_df["FEEDBACK"] == 1).sum()
+            overall_accuracy = overall_correct / len(formal_df)
         else:
-            bonus = (1 + (MAX_BONUS - 1) * (accuracy - BONUS_THRESHOLD)/ (1 - BONUS_THRESHOLD))
-            bonus = min(MAX_BONUS, bonus)
-
-        return accuracy, bonus
+            overall_accuracy = 0.0
+            
+        # Check bonus eligibility
+        # (1) At least 800 trials completed in each session 1-5
+        # (2) Overall accuracy >= 75%
+        bonus_eligible = True
+        if len(session_trial_counts) < 5:
+            bonus_eligible = False
+        else:
+            for count in session_trial_counts:
+                if count < 800:
+                    bonus_eligible = False
+                    break
+        if overall_accuracy < 0.75:
+            bonus_eligible = False
+            
+        if bonus_eligible:
+            acc_pct = overall_accuracy * 100
+            bonus = 10.0 + (acc_pct - 75.0) * 2.0
+            bonus = min(50.0, max(10.0, bonus))
+        else:
+            bonus = 0.0
+            
+        total_payment = total_standard_payment + bonus
+        return overall_accuracy, total_standard_payment, bonus, total_payment
 
 
     def finish_experiment():
@@ -212,6 +230,77 @@ def experiment_update():
         core.wait(5)
         win0.close()
         core.quit()
+
+
+    def handle_session_completion():
+        try:
+            info_df = pd.read_csv(
+                FILENAME_INFO,
+                dtype={'id': str}
+            )
+            idx = info_df[info_df['id'] == subj_id].index
+            if not idx.empty:
+                info_df.loc[idx, 'session_comp'] += 1
+                info_df.to_csv(FILENAME_INFO, index=False, encoding='utf-8-sig')
+                print(f"DEBUG: Session completed for {subj_id}. \
+                      Total sessions: {info_df.loc[idx[0], 'session_comp']}")
+            else:
+                print(f"WARNING: ID {subj_id} not found in {FILENAME_INFO}")
+        except FileNotFoundError:
+            print(f"ERROR: Info file {FILENAME_INFO} not found. Cannot update session count.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        
+        # show bonus after Session 5
+        if curr_sess == BONUS_SESSION:
+            overall_accuracy, total_standard_payment, bonus, total_payment = calculate_payments()
+
+            info_df = pd.read_csv(
+                FILENAME_INFO,
+                dtype={'id': str}
+            )
+
+            idx = info_df[
+                info_df['id'] == subj_id
+            ].index
+
+            if not idx.empty:
+                info_df.loc[idx, 'final_accuracy'] = round(
+                    overall_accuracy * 100,
+                    2
+                )
+                info_df.loc[idx, 'final_bonus'] = round(
+                    bonus,
+                    2
+                )
+                info_df.to_csv(
+                    FILENAME_INFO,
+                    index=False,
+                    encoding='utf-8-sig'
+                )
+
+            text_stim.setHeight(32 * SY)
+            text_stim.pos = (0, 0)
+            text_stim.alignText = 'left'
+            text_stim.anchorHoriz = 'center'
+            text_stim.anchorVert = 'center'
+            text_stim.wrapWidth = 1200 * SX
+            text_stim.lineSpacing = 1.6
+
+            text_stim.setText(
+                f"Experiment Finished!\n\n"
+                f"Overall Accuracy (Sessions 1-5): {overall_accuracy*100:.1f}%\n\n"
+                f"Total Standard Payment Earned: £{total_standard_payment:.2f}\n"
+                f"Total Bonus Earned: £{bonus:.2f}\n"
+                f"Total Payment: £{total_payment:.2f}\n\n"
+                f"Thank you for your participation."
+            )
+
+            text_stim.draw()
+            win0.flip()
+            core.wait(15)
+
+        finish_experiment()
 
     # =========================
     # break settings
@@ -258,21 +347,25 @@ def experiment_update():
             if remaining > 0:
 
                 text_stim.setText(
-                    f"Experiment Paused\n"
-                    f"Remaining break time: {mins:02d}:{secs:02d}\n"
+                    f"Experiment Paused\n\n\n\n"
+                    f"Remaining break time: {mins:02d}:{secs:02d}\n\n\n"
                     f"Keep focusing on accuracy to qualify for higher bonus reward!"
                 )
 
             else:
 
                 text_stim.setText(
-                    "Break finished.\n\n"
-                    "Click Resume to continue.\n\n"
+                    "Break finished.\n\n\n\n"
+                    "Click Resume to continue."
                 )
 
-            text_stim.setHeight(45*SY)
-            text_stim.alignText = 'center'
-            text_stim.pos = (0, 120 * SY)
+            text_stim.height = 30 * SY
+            text_stim.alignText = 'left'
+            text_stim.anchorHoriz = 'center'
+            text_stim.anchorVert = 'center'
+            text_stim.wrapWidth = 1100 * SX
+            text_stim.lineSpacing = 2.2
+            text_stim.pos = (0, 130 * SY)
 
             text_stim.draw()
 
@@ -550,43 +643,13 @@ def experiment_update():
     anchorVert='center'
     )
 
-    tier4_text = visual.TextStim(
-    win0,
-    text="Tier 4",
-    pos=(-320*SX, 340*SY),
-    height=30*SY,
-    units='pix',
-    color=(-1, -1, -1)
-    )
-
-    tier1_text = visual.TextStim(
+    accuracy_display_text = visual.TextStim(
         win0,
-        text="Tier 1",
-        pos=(320*SX, 340*SY),
-        height=30*SY,
+        text="Accuracy: 0%",
+        pos=(750 * SX, 390 * SY),
+        height=30 * SY,
         units='pix',
         color=(-1, -1, -1)
-    )
-
-
-    performance_bg = visual.Rect(
-    win0,
-    width=500*SX,
-    height=40*SY,
-    pos=(0, 340*SY),
-    fillColor=(0.75, 0.75, 0.75),
-    lineColor=(0.75, 0.75, 0.75),
-    units='pix'
-    )
-
-    performance_bar = visual.Rect(
-        win0,
-        width=0,
-        height=40*SY,
-        pos=(-250*SX, 340*SY),
-        fillColor=(0.55, 0.75, 0.9),
-        lineColor=(0.55, 0.75, 0.9),
-        units='pix'
     )
 
     # ====================================
@@ -597,7 +660,7 @@ def experiment_update():
         win0,
         width=700 * SX,
         height=25 * SY,
-        pos=(0, 480 * SY),
+        pos=(0, 390 * SY),
         fillColor=(0.65, 0.65, 0.65),
         lineColor=None,
         units='pix'
@@ -607,64 +670,61 @@ def experiment_update():
         win0,
         width=1,
         height=25 * SY,
-        pos=(-350 * SX, 480 * SY),
+        pos=(-350 * SX, 390 * SY),
         fillColor=(0.4, 0.7, 1),
         lineColor=None,
         units='pix'
     )
 
     # ====================================
-    # Bonus minimum marker (800 / 1200)
+    # Progress Bar Markers
     # ====================================
-
-    BONUS_MIN_TRIALS = 800
-
-    bonus_marker_x = (
-        -350 * SX
-        + 700 * SX * BONUS_MIN_TRIALS / FORMAL_TRIAL_NUMBER
-    )
-
-    bonus_marker = visual.Line(
+    marker_600_x = -350 * SX + 700 * SX * (600 / FORMAL_TRIAL_NUMBER)
+    marker_600_line = visual.Line(
         win0,
-        start=(bonus_marker_x, 465 * SY),
-        end=(bonus_marker_x, 495 * SY),
+        start=(marker_600_x, 375 * SY),
+        end=(marker_600_x, 405 * SY),
         lineWidth=4,
         lineColor=(-1, -1, -1),
         units='pix'
     )
-
-    bonus_marker_text = visual.TextStim(
+    marker_600_text = visual.TextStim(
         win0,
-        text="Bonus minimum",
-        pos=(bonus_marker_x, 520 * SY),
-        height=20 * SY,
+        text="Standard pay min",
+        pos=(marker_600_x, 345 * SY),
+        height=18 * SY,
+        units='pix',
+        color=(-1, -1, -1)
+    )
+
+    marker_800_x = -350 * SX + 700 * SX * (800 / FORMAL_TRIAL_NUMBER)
+    marker_800_star = visual.TextStim(
+        win0,
+        text="★",
+        pos=(marker_800_x, 390 * SY),
+        height=30 * SY,
+        color=(-1, -1, -1),
+        units='pix'
+    )
+    marker_800_text = visual.TextStim(
+        win0,
+        text="Bonus min",
+        pos=(marker_800_x, 435 * SY),
+        height=18 * SY,
         units='pix',
         color=(-1, -1, -1)
     )
 
 
-    def update_performance_bar():
-        accuracy = formal_correct_count / max(1, formal_trial_count)
-        progress = max(0, min((accuracy - TIER4) / (TIER1 - TIER4), 1.0))
-
-        bar_width = 500 * SX * progress
-
-        performance_bar.width = bar_width
-        performance_bar.pos = (-250 * SX + bar_width/2, 340 * SY)
-
-        if accuracy >= TIER1:
-            performance_bar.fillColor = (0.85, 0.75, 0.35)
-            performance_bar.lineColor = (0.85, 0.75, 0.35)
-
-        elif accuracy >= TIER2:
-            performance_bar.fillColor = (0.50, 0.75, 0.50)
-            performance_bar.lineColor = (0.50, 0.75, 0.50)
-        elif accuracy >= TIER3:
-            performance_bar.fillColor = (0.85, 0.55, 0.55)
-            performance_bar.lineColor = (0.85, 0.55, 0.55)
+    def draw_accuracy():
+        nonlocal training_correct_count, training_trial_count, formal_correct_count, formal_trial_count, train, block_no
+        if train and block_no == 1:
+            acc = (training_correct_count / max(1, training_trial_count)) * 100
         else:
-            performance_bar.fillColor = (0.60, 0.75, 0.90)
-            performance_bar.lineColor = (0.60, 0.75, 0.90)
+            acc = (formal_correct_count / max(1, formal_trial_count)) * 100
+        accuracy_display_text.setText(f"Accuracy: {int(round(acc))}%")
+        accuracy_display_text.draw()
+
 
     ## Progress bar
     def update_trial_progress(progress):
@@ -677,7 +737,7 @@ def experiment_update():
 
         trial_progress_bar.pos = (
             -350 * SX + width_now / 2,
-            480 * SY
+            390 * SY
         )
     
     ### keyboard
@@ -772,13 +832,19 @@ def experiment_update():
         height=120
     )
 
-    
-        
-    ## Instructions at the beginning
+
     def show_instruction_page(
         text,
         button_label="Next"
     ):
+        text_stim.pos = (0, 130 * SY)
+        text_stim.height = 30 * SY
+        text_stim.alignText = 'left'
+        text_stim.anchorHoriz = 'center'
+        text_stim.anchorVert = 'center'
+        text_stim.wrapWidth = 1100 * SX
+        text_stim.lineSpacing = 2.2
+        
         button_width = max(260, len(button_label) * 22)
 
         btn_rect, btn_text = create_button(
@@ -793,10 +859,226 @@ def experiment_update():
             text,
         )
 
+    
+    def run_instructions():
+        page = 1
+        num_pages = 7
+        
+        # Create Back and Next buttons
+        back_rect, back_text = create_button("Back", pos=(-250 * SX, -380 * SY), width=200, height=70)
+        next_rect, next_text = create_button("Next", pos=(250 * SX, -380 * SY), width=200, height=70)
+        
+        # For page 6 inactive break button (made darker gray for visual clarity while remaining disabled)
+        inactive_break_rect, inactive_break_text = create_button("Take Break", pos=(0, -200 * SY), width=280, height=80)
+        inactive_break_rect.fillColor = (0.6, 0.6, 0.6)
+        inactive_break_rect.lineColor = (0.3, 0.3, 0.3)
+        inactive_break_text.color = (0.3, 0.3, 0.3)
+        
+        while 1 <= page <= num_pages:
+            emergency_quit()
+            
+            # Reset text position, height, and line spacing (vertical spacing increased, left aligned internally, centered horizontally)
+            text_stim.pos = (0, 130 * SY)
+            text_stim.height = 30 * SY
+            text_stim.alignText = 'left'
+            text_stim.anchorHoriz = 'center'
+            text_stim.anchorVert = 'center'
+            text_stim.wrapWidth = 1100 * SX
+            text_stim.lineSpacing = 2.2
+            
+            # Page-specific drawing and logic
+            if page == 1:
+                text_stim.setText(
+                    "Welcome to the Experiment!\n\n\n"
+                    "In this experiment, you will perform an auditory decision-making task.\n\n\n"
+                    "Listen to the sound and make your choice.\n\n\n"
+                    "Choose between A and B.\n\n\n"
+                    "You will receive immediate feedback after each choice.\n\n\n"
+                    "This browser will guide you through the controls and interface."
+                )
+                text_stim.draw()
+                
+            elif page == 2:
+                text_stim.setText(
+                    "Choice Buttons\n\n\n"
+                    "These buttons will appear on the screen during the response window.\n\n\n"
+                    "Click the buttons to make your choice.\n\n\n"
+                    "Choose between A and B."
+                )
+                text_stim.draw()
+                
+                # Draw A and B buttons as visual elements (moved down to prevent overlap)
+                temp_A_rect, temp_A_text = create_button("A", pos=(-200 * SX, -200 * SY), width=200, height=100)
+                temp_B_rect, temp_B_text = create_button("B", pos=(200 * SX, -200 * SY), width=200, height=100)
+                temp_A_rect.draw()
+                temp_A_text.draw()
+                temp_B_rect.draw()
+                temp_B_text.draw()
+                
+            elif page == 3:
+                text_stim.setText(
+                    "Accuracy Display\n\n\n"
+                    "Your performance accuracy will be displayed in the top-right corner.\n\n\n"
+                    "You will be able to see your current accuracy value throughout the task."
+                )
+                text_stim.draw()
+                
+                # Draw accuracy display UI element (moved down to prevent overlap)
+                temp_acc_text = visual.TextStim(
+                    win0,
+                    text="Accuracy: 85%",
+                    pos=(0, -200 * SY),
+                    height=40 * SY,
+                    color=(-1, -1, -1),
+                    units='pix'
+                )
+                temp_acc_text.draw()
+                
+            elif page == 4:
+                text_stim.setText(
+                    "Trial Progress Bar\n\n\n"
+                    "A progress bar at the top of the screen shows your session progress.\n\n\n"
+                    "• 600 trials: The minimum required to receive standard pay.\n\n\n"
+                    "• 800 trials: The minimum required to be eligible for performance bonus.\n\n\n"
+                    "Markers and labels on the bar will indicate these milestones."
+                )
+                text_stim.draw()
+                
+                # Draw visual demo (moved down to prevent overlap)
+                temp_bg = visual.Rect(win0, width=700 * SX, height=25 * SY, pos=(0, -200 * SY), fillColor=(0.65, 0.65, 0.65), lineColor=None, units='pix')
+                temp_bar = visual.Rect(win0, width=350 * SX, height=25 * SY, pos=(-175 * SX, -200 * SY), fillColor=(0.4, 0.7, 1), lineColor=None, units='pix')
+                
+                marker_600_demo_x = 0
+                marker_600_demo_line = visual.Line(win0, start=(marker_600_demo_x, -215 * SY), end=(marker_600_demo_x, -185 * SY), lineWidth=4, lineColor=(-1, -1, -1), units='pix')
+                marker_600_demo_text = visual.TextStim(win0, text="Standard pay min", pos=(marker_600_demo_x, -245 * SY), height=18 * SY, color=(-1, -1, -1), units='pix')
+                
+                marker_800_demo_x = (-350 * SX) + (700 * SX * 800 / 1200)
+                marker_800_demo_star = visual.TextStim(win0, text="★", pos=(marker_800_demo_x, -200 * SY), height=30 * SY, color=(-1, -1, -1), units='pix')
+                marker_800_demo_text = visual.TextStim(win0, text="Bonus min", pos=(marker_800_demo_x, -160 * SY), height=18 * SY, color=(-1, -1, -1), units='pix')
+                
+                temp_bg.draw()
+                temp_bar.draw()
+                marker_600_demo_line.draw()
+                marker_600_demo_text.draw()
+                marker_800_demo_star.draw()
+                marker_800_demo_text.draw()
+                
+            elif page == 5:
+                text_stim.setText(
+                    "Next Trial Button\n\n\n"
+                    "After each trial, this button will appear.\n\n\n"
+                    "Click it to immediately proceed to the next trial.\n\n\n"
+                    "If you do not click, the next trial will start automatically after a short delay."
+                )
+                text_stim.draw()
+                
+                temp_next_rect, temp_next_text = create_button("Next Trial", pos=(0, -200 * SY), width=280, height=80)
+                temp_next_rect.draw()
+                temp_next_text.draw()
+                
+            elif page == 6:
+                text_stim.setText(
+                    "Taking Breaks\n\n\n"
+                    "A break opportunity dialog will automatically appear every 200 formal trials.\n\n\n"
+                    "There are a total of 6 break opportunities during the session.\n\n\n"
+                    "Training blocks do NOT allow breaks.\n\n\n"
+                    "Below is an inactive demonstration of the Break button."
+                )
+                text_stim.draw()
+                inactive_break_rect.draw()
+                inactive_break_text.draw()
+                
+            elif page == 7:
+                text_stim.setText(
+                    "Session Duration\n\n\n"
+                    "If this session exceeds 90 minutes, the experimenter will inform you and stop the session.\n\n\n"
+                    "Do not worry!\n\n\n"
+                    "No-response trials caused by experiment termination will not count against your bonus accuracy."
+                )
+                text_stim.draw()
+                
+            # Draw Back and Next buttons
+            if page > 1:
+                if back_rect.contains(mouse):
+                    back_rect.fillColor = (0.4, 0.7, 1)
+                else:
+                    back_rect.fillColor = (0.8, 0.8, 0.8)
+                back_rect.draw()
+                back_text.draw()
+                
+            if next_rect.contains(mouse):
+                next_rect.fillColor = (0.4, 0.7, 1)
+            else:
+                next_rect.fillColor = (0.8, 0.8, 0.8)
+            next_rect.draw()
+            next_text.draw()
+            
+            win0.flip()
+            
+            # Button click handling
+            if mouse.isPressedIn(next_rect):
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+                page += 1
+                core.wait(0.1)
+                
+            elif page > 1 and mouse.isPressedIn(back_rect):
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+                page -= 1
+                core.wait(0.1)
+                
+            core.wait(0.01)
+
+
+    def show_break_dialog():
+        take_rect, take_text = create_button("Take Break", pos=(-200 * SX, -100 * SY), width=250, height=80)
+        cont_rect, cont_text = create_button("Continue", pos=(200 * SX, -100 * SY), width=250, height=80)
+        
+        mouse.clickReset()
+        event.clearEvents()
+        
+        while True:
+            emergency_quit()
+            
+            text_stim.setText("Would you like to take a break?")
+            text_stim.pos = (0, 100 * SY)
+            text_stim.height = 40 * SY
+            text_stim.draw()
+            
+            if take_rect.contains(mouse):
+                take_rect.fillColor = (0.4, 0.7, 1)
+            else:
+                take_rect.fillColor = (0.8, 0.8, 0.8)
+                
+            if cont_rect.contains(mouse):
+                cont_rect.fillColor = (0.4, 0.7, 1)
+            else:
+                cont_rect.fillColor = (0.8, 0.8, 0.8)
+                
+            take_rect.draw()
+            take_text.draw()
+            cont_rect.draw()
+            cont_text.draw()
+            
+            draw_accuracy()
+            
+            win0.flip()
+            
+            if mouse.isPressedIn(take_rect):
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+                run_break()
+                return
+            elif mouse.isPressedIn(cont_rect):
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+                return
+            core.wait(0.01)
+
 
     def next_trial_page(in_warmup):
         win0.mouseVisible = True
-        nonlocal break_count
 
         next_rect, next_text = create_button(
             "Next Trial",
@@ -805,37 +1087,13 @@ def experiment_update():
             height=80
         )
 
-        if break_count < MAX_BREAKS and not in_warmup:
-
-            break_rect, break_text = create_button(
-                f"Take Break ({MAX_BREAKS-break_count} left)",
-                pos=(-750*SX, 450*SY),
-                width=280,
-                height=80
-            )
-
         page_clock = core.Clock()
-
         mouse.clickReset()
 
         while page_clock.getTime() < 3:
-
             emergency_quit()
-            if not in_warmup:
-                update_performance_bar()
-
-                text_stim.setText("Current performance level")
-                text_stim.pos = (0, 220 * SY)
-                text_stim.height = 40 * SY
-
-                text_stim.draw()
-
-                performance_bg.draw()
-                performance_bar.draw()
-
-                tier4_text.draw()
-                tier1_text.draw()
-                        # ---------- Next button ----------
+            
+            # ---------- Next button ----------
             if next_rect.contains(mouse):
                 next_rect.fillColor = (0.4, 0.7, 1)
             else:
@@ -843,40 +1101,16 @@ def experiment_update():
 
             next_rect.draw()
             next_text.draw()
-
-            # ---------- Break button ----------
-            if break_count < MAX_BREAKS and not in_warmup:
-
-                if break_rect.contains(mouse):
-                    break_rect.fillColor = (0.4, 0.7, 1)
-                else:
-                    break_rect.fillColor = (0.8, 0.8, 0.8)
-
-                break_rect.draw()
-                break_text.draw()
+            
+            # Draw accuracy
+            draw_accuracy()
 
             win0.flip()
 
             # ---------- Next ----------
             if mouse.isPressedIn(next_rect):
-
                 while mouse.getPressed()[0]:
                     core.wait(0.01)
-
-                return
-
-            # ---------- Break ----------
-            if (break_count < MAX_BREAKS
-                    and not in_warmup
-                    and mouse.isPressedIn(break_rect)):
-
-                while mouse.getPressed()[0]:
-                    core.wait(0.01)
-
-                run_break()
-
-                break_count += 1
-
                 return
 
             core.wait(0.01)
@@ -889,61 +1123,82 @@ def experiment_update():
     win0.color = bg_color
     text_stim.color = text_color
     event.clearEvents()
-    show_instruction_page(
-        "Welcome!\n\n"
-        "In this experiment, you will hear sounds and make choices by clicking either Button A or Button B.\n"
-        "You will have a few seconds to respond and will receive feedback after each response.\n"
-        "Please refrain from using the keyboard during the experiment unless you wish to quit the experiment entirely.",
-        "Next"
-    )
 
-    show_instruction_page(
-        "Your goal is to make as many correct responses as possible.\n"
-        "Please pay attention throughout the experiment. "
-        "If your performance is too low, the experiment may be paused automatically. ",
-        "Next"
-    )
-
-    show_instruction_page(
-        "During the experiment, you can click [Next Trial] to start the next trial immediately.\n"
-        "If you do not click the button, the next trial will start automatically after a short delay. ",
-        "Next"
-    )
-
-    if curr_sess == 1:
-        show_instruction_page(
-            "You will first complete 30 warm-up trials.\n\n"
-            "Please respond as accurately as possible.",
-            "Start Warm-up"
-        )
-    else:
-
-        show_instruction_page(
-            "The task follows the same rules as in the previous sessions. Your goal is to increase your accuracy rate!\n"
-            "The task will last for around 50-90 minutes, excluding 6 optional short breaks.\n"
-            "Please note that the experimenter will monitor the session throughout the experiment.\n",
-            "Next"
-        )
-
-        show_instruction_page(
+    show_instr = True
+    if curr_sess > 1:
+        read_rect, read_text = create_button("Read Instructions", pos=(-220 * SX, -100 * SY), width=320, height=80)
+        skip_rect, skip_text = create_button("Skip", pos=(220 * SX, -100 * SY), width=200, height=80)
+        
+        mouse.clickReset()
+        event.clearEvents()
+        while True:
+            emergency_quit()
+            text_stim.setText("Would you like to read the instructions again?")
+            text_stim.pos = (0, 100 * SY)
+            text_stim.height = 40 * SY
+            text_stim.draw()
             
-            "You will receive a bonus payment if you complete a minimum number of trials in each session, and your overall accuracy across all sessions exceeds 75%. The higher your accuracy, the larger the bonus payment.\n"
-            "A performance bar will be displayed as a reference, indicating your current accuracy tier.\n"
-            "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n\n"
-            "Click the button below when you are ready to begin.",
-    
-            "Start Experiment"
-        )
+            if read_rect.contains(mouse):
+                read_rect.fillColor = (0.4, 0.7, 1)
+            else:
+                read_rect.fillColor = (0.8, 0.8, 0.8)
+                
+            if skip_rect.contains(mouse):
+                skip_rect.fillColor = (0.4, 0.7, 1)
+            else:
+                skip_rect.fillColor = (0.8, 0.8, 0.8)
+                
+            read_rect.draw()
+            read_text.draw()
+            skip_rect.draw()
+            skip_text.draw()
+            
+            win0.flip()
+            
+            if mouse.isPressedIn(read_rect):
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+                show_instr = True
+                break
+            elif mouse.isPressedIn(skip_rect):
+                while mouse.getPressed()[0]:
+                    core.wait(0.01)
+                show_instr = False
+                break
+            core.wait(0.01)
+            
+    if show_instr:
+        run_instructions()
 
-        show_instruction_page(
-            "If this session exceeds 90 minutes, the experimenter will inform you and stop the experiment.\n"
-            "Don't worry! If this happens, any unanswered trials at the end of the session will not affect your bonus payment.\n"
-            "If an emergency occurs, you may terminate the experiment at any time by pressing [F12].\n\n"
-            "Click the button below when you are ready to begin.",
+    # Final Ready Page (for all sessions)
+    ready_label = "Start Warm-up" if curr_sess == 1 else "Start Experiment"
+    ready_rect, ready_text = create_button(ready_label, pos=(0, -100 * SY), width=320, height=80)
     
-            "Start Experiment"
-        )
-
+    mouse.clickReset()
+    event.clearEvents()
+    while True:
+        emergency_quit()
+        text_stim.setText("Ready? Let's start.")
+        text_stim.pos = (0, 100 * SY)
+        text_stim.height = 40 * SY
+        text_stim.alignText = 'center'
+        text_stim.draw()
+        
+        if ready_rect.contains(mouse):
+            ready_rect.fillColor = (0.4, 0.7, 1)
+        else:
+            ready_rect.fillColor = (0.8, 0.8, 0.8)
+            
+        ready_rect.draw()
+        ready_text.draw()
+        
+        win0.flip()
+        
+        if mouse.isPressedIn(ready_rect):
+            while mouse.getPressed()[0]:
+                core.wait(0.01)
+            break
+        core.wait(0.01)
 
     # ====================================
     # Audio warm-up (PTB initialization)
@@ -982,6 +1237,7 @@ def experiment_update():
 
     # BLOCK ARRANGEMENT
     curr_block_arr, curr_total_block = block_size(part_group)
+
     print(f'DEBUG: block sizes: {curr_block_arr}; total block: {curr_total_block}')
     if part_group == 1:
         if randint(0, 1) == 0:
@@ -991,7 +1247,7 @@ def experiment_update():
 
     train = False
     if curr_sess == 1:
-        curr_total_block+= 1 # add a training 'block'
+        curr_total_block += 1 # add a training 'block'
         curr_block_arr.insert(0, 30)
         train = True
     main_trial_counter = 0
@@ -1003,7 +1259,8 @@ def experiment_update():
     ## =========================================================================
     ## MAIN LOOP
 
-    for block_no in range(1, curr_total_block+1):
+    block_no = 1
+    while block_no <= curr_total_block:
         if finish:
             break
 
@@ -1058,12 +1315,9 @@ def experiment_update():
             if not (train and block_no == 1):
                 main_trial_counter += 1
             if train and block_no == 1:
-
                 # Warm-up
-                progress = (trial_no / 30)
-
+                progress = (trial_no / curr_block_arr[block_no-1])
             else:
-
                 # Main Experiment
                 progress = (main_trial_counter / FORMAL_TRIAL_NUMBER)
 
@@ -1162,8 +1416,10 @@ def experiment_update():
                     trial_progress_bg.draw()
 
                     if not (train and block_no == 1):
-                        bonus_marker.draw()
-                        bonus_marker_text.draw()
+                        marker_600_line.draw()
+                        marker_600_text.draw()
+                        marker_800_star.draw()
+                        marker_800_text.draw()
 
                     trial_progress_bar.draw()
 
@@ -1172,6 +1428,9 @@ def experiment_update():
 
                     B_rect.draw()
                     B_text.draw()
+                    
+                    draw_accuracy()
+                    
                     win0.flip() 
 
                     # mouse response
@@ -1205,6 +1464,8 @@ def experiment_update():
                     if updated_sub_response == true_cat:
                         if not (train and block_no == 1):
                             formal_correct_count += 1
+                        else:
+                            training_correct_count += 1
                         updated_feed = 1
                         corr_counter_block += 1
                         corr_counter_session += 1
@@ -1225,9 +1486,10 @@ def experiment_update():
                 
                 if rt == -1:
                     consecutive_timeout += 1
-                    # print(f"DEBUG: Trial {trial_no} - Timed Out! Auto-switching to feedback.")
                 if not (train and block_no == 1):
                         formal_trial_count += 1
+                else:
+                        training_trial_count += 1
                 win0.flip()
                 event.clearEvents()
 
@@ -1278,8 +1540,10 @@ def experiment_update():
                     trial_progress_bg.draw()
 
                     if not (train and block_no == 1):
-                        bonus_marker.draw()
-                        bonus_marker_text.draw()
+                        marker_600_line.draw()
+                        marker_600_text.draw()
+                        marker_800_star.draw()
+                        marker_800_text.draw()
 
                     trial_progress_bar.draw()
 
@@ -1290,12 +1554,18 @@ def experiment_update():
                     B_text.draw()
 
                     img_to_draw.draw()
+                    
+                    draw_accuracy()
 
                     win0.flip()
 
                     core.wait(feedback)
                 in_warmup = train and block_no == 1
                 next_trial_page(in_warmup)
+
+                # Check for automatic breaks (every 200 formal trials)
+                if not in_warmup and formal_trial_count in [200, 400, 600, 800, 1000, 1200]:
+                    show_break_dialog()
 
                 ## count easy trial error
                 if rt != -1 and updated_feed == 0 and distance >= easy_threshold:
@@ -1304,11 +1574,15 @@ def experiment_update():
                     consecutive_easy_error = 0
                 ## stop when several consecutive no response
                 if consecutive_timeout >= AUTO_TIMEOUT_THRESHOLD:
-                    text_stim.setHeight(60*SY)
-                    text_stim.pos = (0,0)
-                    text_stim.alignText = 'center'
+                    text_stim.height = 30 * SY
+                    text_stim.pos = (0, 130 * SY)
+                    text_stim.alignText = 'left'
+                    text_stim.anchorHoriz = 'center'
+                    text_stim.anchorVert = 'center'
+                    text_stim.wrapWidth = 1100 * SX
+                    text_stim.lineSpacing = 2.2
                     text_stim.setText(
-                        f"Three consecutive trials received no response.\n\n"
+                        f"Three consecutive trials received no response.\n\n\n\n"
                         f"The experiment has been paused automatically."
                     )
 
@@ -1323,11 +1597,15 @@ def experiment_update():
                 
                 ## stop when 3 consecutive easy trial errors
                 if consecutive_easy_error >= AUTO_EASY_ERROR_THRESHOLD:
-                    text_stim.setHeight(60*SY)
-                    text_stim.pos = (0,0)
-                    text_stim.alignText = 'center'
+                    text_stim.height = 30 * SY
+                    text_stim.pos = (0, 130 * SY)
+                    text_stim.alignText = 'left'
+                    text_stim.anchorHoriz = 'center'
+                    text_stim.anchorVert = 'center'
+                    text_stim.wrapWidth = 1100 * SX
+                    text_stim.lineSpacing = 2.2
                     text_stim.setText(
-                        f"Several easy trials were answered incorrectly.\n\n"
+                        f"Several easy trials were answered incorrectly.\n\n\n\n"
                         f"Please take a short pause and refocus."
                     )
 
@@ -1353,13 +1631,17 @@ def experiment_update():
                     )
 
                     if same_key and error_count >= 4:
-                        text_stim.setHeight(60*SY)
-                        text_stim.pos = (0,0)
-                        text_stim.alignText = 'center'
+                        text_stim.height = 30 * SY
+                        text_stim.pos = (0, 130 * SY)
+                        text_stim.alignText = 'left'
+                        text_stim.anchorHoriz = 'center'
+                        text_stim.anchorVert = 'center'
+                        text_stim.wrapWidth = 1100 * SX
+                        text_stim.lineSpacing = 2.2
                         text_stim.setText(
-                        f"A repetitive response pattern was detected.\n\n"
-                        f"Please take a short pause and refocus."
-                    )
+                            f"A repetitive response pattern was detected.\n\n\n\n"
+                            f"Please take a short pause and refocus."
+                        )
 
                         text_stim.draw()
                         win0.flip()
@@ -1372,15 +1654,40 @@ def experiment_update():
                 ### Save record
                 file_name = f"{subj_id}_{part_group}.csv"
                 pull_file = os.path.join(RESULT_PATH, file_name)
+                
                 if curr_sess == 1 and trial_no == 1 and block_no == 1:
                     if os.path.exists(pull_file):
-                        print(f'DEBUG: File {pull_file} already exists! Skipping creation.')
+                        # Appending to an existing file if repeating training
+                        old_df = pd.read_csv(pull_file, dtype={'ID': str})
+                        if not old_df.empty:
+                            last_trial = old_df.iloc[-1]
+                            updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
+                            updated_output['pAMP']          = last_trial['AMP']
+                            updated_output['pLOGICAL_AMP']  = last_trial['LOGICAL_AMP']
+                            updated_output['pphyBOUND']     = last_trial['PHY_BOUND']
+                            updated_output['pDISTANCE']     = last_trial['DISTANCE']
+                            updated_output['pTRUE_CAT']     = last_trial['TRUE_CAT']
+                            updated_output['pSUB RESPONSE'] = last_trial['SUB RESPONSE']
+                            updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
+                            updated_output['pRT']           = last_trial['RT']
+                        else:
+                            p_columns = ['pDISTRIBUTION','pAMP','pLOGICAL_AMP','pphyBOUND','pDISTANCE','pTRUE_CAT','pSUB RESPONSE','pFEEDBACK','pRT']
+                            for col in p_columns:
+                                updated_output[col] = "---"
+                        columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                            'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
+                            'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
+                            'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
+                            'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
+                            'TOTAL_TRIAL_INBLK','TRIAL_SSE']
+                        updated_output = updated_output[columns]
+                        updated_output.to_csv(pull_file, mode='a', header=False, index=False)
                     else:
                         print('DEBUG: Continue saving the first record.')
                         create_exp_file(subj_id,part_group,updated_output)
+                
                 elif trial_no == 1 and block_no == 1:
-                    p_columns = ['pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
-                                'pSUB RESPONSE','pFEEDBACK','pRT']
+                    p_columns = ['pDISTRIBUTION','pAMP','pLOGICAL_AMP','pphyBOUND','pDISTANCE','pTRUE_CAT','pSUB RESPONSE','pFEEDBACK','pRT']
                     for col in p_columns:
                         updated_output[col] = "---"
                     
@@ -1422,117 +1729,99 @@ def experiment_update():
                     updated_output.to_csv(pull_file, mode='a', header=False, index=False)
                 trial_finished = True
 
-        # Warm-up block finished
-
+        # End of block checks
         if train and block_no == 1:
-
+            train_acc = (training_correct_count / max(1, training_trial_count)) * 100
+            
             show_instruction_page(
-                "End of Warm-up\n\n"
-                "Please prepare to begin the main experiment.\n"
-                "The task will last for around 50-90 minutes.\n"
-                "Please note that the experimenter will monitor the session throughout the experiment.\n\n",
+                f"Training completed.\n\n\n"
+                f"Accuracy: {int(round(train_acc))}%",
                 "Next"
             )
-
-
-            show_instruction_page(
-                "You will receive a bonus payment if you complete a minimum number of trials in each session, and your overall accuracy across all sessions exceeds 75%. The higher your accuracy, the larger the bonus payment.\n"
-                "A performance bar will be displayed as a reference, indicating your current accuracy tier. \n"
-                "Note, this bar is only a reference. Your total bonus accumulated will be informed at the end of the last session.\n",
-
-                "Next"
-            )
-
-            show_instruction_page(
-            "If this session exceeds 90 minutes, the experimenter will inform you and stop the experiment.\n"
-            "Don't worry! If this happens, any unanswered trials at the end of the session will not affect your bonus payment.\n"
-            "If an emergency occurs, you may terminate the experiment at any time by pressing [F12].\n\n"
-            "Click the button below when you are ready to begin.",
-    
-            "Start Experiment"
-            )
-
-
-        if trial_no == curr_block_arr[block_no-1]:
-            last_trial= True
+            
+            if train_acc <= 50:
+                show_instruction_page(
+                    "Training accuracy is below chance.\n\n\n"
+                    "You must complete another training block.",
+                    "Start Training"
+                )
+                training_correct_count = 0
+                training_trial_count = 0
+                # Repeat block 1 without incrementing block_no
+                continue
+            else:
+                start_rect, start_text = create_button("Start Experiment", pos=(-220 * SX, -100 * SY), width=320, height=80)
+                more_rect, more_text = create_button("More Training", pos=(220 * SX, -100 * SY), width=250, height=80)
+                
+                mouse.clickReset()
+                event.clearEvents()
+                chosen = None
+                while True:
+                    emergency_quit()
+                    text_stim.setText(
+                        f"Training accuracy: {int(round(train_acc))}%\n\n\n"
+                        f"Would you like to start the experiment or do more training?"
+                    )
+                    text_stim.pos = (0, 130 * SY)
+                    text_stim.height = 30 * SY
+                    text_stim.alignText = 'left'
+                    text_stim.anchorHoriz = 'center'
+                    text_stim.anchorVert = 'center'
+                    text_stim.wrapWidth = 1100 * SX
+                    text_stim.lineSpacing = 2.2
+                    text_stim.draw()
+                    
+                    if start_rect.contains(mouse):
+                        start_rect.fillColor = (0.4, 0.7, 1)
+                    else:
+                        start_rect.fillColor = (0.8, 0.8, 0.8)
+                        
+                    if more_rect.contains(mouse):
+                        more_rect.fillColor = (0.4, 0.7, 1)
+                    else:
+                        more_rect.fillColor = (0.8, 0.8, 0.8)
+                        
+                    start_rect.draw()
+                    start_text.draw()
+                    more_rect.draw()
+                    more_text.draw()
+                    
+                    win0.flip()
+                    
+                    if mouse.isPressedIn(start_rect):
+                        while mouse.getPressed()[0]:
+                            core.wait(0.01)
+                        chosen = "start"
+                        break
+                    elif mouse.isPressedIn(more_rect):
+                        while mouse.getPressed()[0]:
+                            core.wait(0.01)
+                        chosen = "more"
+                        break
+                    core.wait(0.01)
+                
+                if chosen == "more":
+                    training_correct_count = 0
+                    training_trial_count = 0
+                    # Repeat block 1
+                    continue
+                else:
+                    train = False
+                    block_no += 1
+                    continue
+        else:
+            if trial_no == curr_block_arr[block_no-1]:
+                last_trial = True
+            block_no += 1
         
-    if block_no == curr_total_block and last_trial == True:
+    if last_trial == True:
         finish = True 
 
     if finish:# INFO table,session_comp + 1
-        try:
-            info_df = pd.read_csv(
-                FILENAME_INFO,
-                dtype={'id': str}
-            )
-            idx = info_df[info_df['id'] == subj_id].index
-            if not idx.empty:
-                info_df.loc[idx, 'session_comp'] += 1
-                info_df.to_csv(FILENAME_INFO, index=False, encoding='utf-8-sig')
-                print(f"DEBUG: Session completed for {subj_id}. \
-                      Total sessions: {info_df.loc[idx[0], 'session_comp']}")
-            else:
-                print(f"WARNING: ID {subj_id} not found in {FILENAME_INFO}")
-        except FileNotFoundError:
-            print(f"ERROR: Info file {FILENAME_INFO} not found. Cannot update session count.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-        
-            # show bonus after Session 5
-        if curr_sess == BONUS_SESSION:
-
-            accuracy, bonus = calculate_final_bonus()
-
-            if accuracy is not None:
-
-                info_df = pd.read_csv(
-                    FILENAME_INFO,
-                    dtype={'id': str}
-                )
-
-                idx = info_df[
-                    info_df['id'] == subj_id
-                ].index
-
-                if not idx.empty:
-
-                    info_df.loc[idx, 'final_accuracy'] = round(
-                        accuracy * 100,
-                        2
-                    )
-
-                    info_df.loc[idx, 'final_bonus'] = round(
-                        bonus,
-                        2
-                    )
-
-                    info_df.to_csv(
-                        FILENAME_INFO,
-                        index=False,
-                        encoding='utf-8-sig'
-                    )
-
-                text_stim.setHeight(60 * SY)
-
-                text_stim.setText(
-                    f"Experiment Finished!\n\n"
-                    f"Overall Accuracy (Sessions 1-5): "
-                    f"{accuracy*100:.1f}%\n\n"
-                    f"Bonus Earned: £{bonus:.2f}\n\n"
-                    f"Thank you for your participation."
-                )
-
-                text_stim.draw()
-
-                win0.flip()
-
-                core.wait(15)
-
-        finish_experiment()
+        handle_session_completion()
 
         
-    
-        ########################################################################################
+    ########################################################################################
 
 # save to file
 def create_exp_file(id,group,first_record):

@@ -16,8 +16,8 @@ def block_size(group):
     Methods:
     Generates N different block sizes (b1, b2... bN)
     Sum of bi = 1200
-    Group 0: N = 12, bi= [40,60]
-    Group 1: N = 3, bi=[150,250];
+    Group 0: N = 24, bi= [40,60]
+    Group 1: N = 6, bi=[150,250];
 
     B. return the block size arrangement, ready to be written into the main csv doc. 
     '''
