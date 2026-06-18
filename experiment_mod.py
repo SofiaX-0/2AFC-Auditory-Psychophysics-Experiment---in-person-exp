@@ -1669,6 +1669,83 @@ def experiment_update():
                 in_warmup = train and block_no == 1
                 next_trial_page(in_warmup)
 
+                ### Save record
+                file_name = f"{subj_id}_{part_group}.csv"
+                pull_file = os.path.join(RESULT_PATH, file_name)
+                
+                if curr_sess == 1 and trial_no == 1 and block_no == 1:
+                    if os.path.exists(pull_file):
+                        # Appending to an existing file if repeating training
+                        old_df = pd.read_csv(pull_file, dtype={'ID': str})
+                        if not old_df.empty:
+                            last_trial = old_df.iloc[-1]
+                            updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
+                            updated_output['pAMP']          = last_trial['AMP']
+                            updated_output['pLOGICAL_AMP']  = last_trial['LOGICAL_AMP']
+                            updated_output['pphyBOUND']     = last_trial['PHY_BOUND']
+                            updated_output['pDISTANCE']     = last_trial['DISTANCE']
+                            updated_output['pTRUE_CAT']     = last_trial['TRUE_CAT']
+                            updated_output['pSUB RESPONSE'] = last_trial['SUB RESPONSE']
+                            updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
+                            updated_output['pRT']           = last_trial['RT']
+                        else:
+                            p_columns = ['pDISTRIBUTION','pAMP','pLOGICAL_AMP','pphyBOUND','pDISTANCE','pTRUE_CAT','pSUB RESPONSE','pFEEDBACK','pRT']
+                            for col in p_columns:
+                                updated_output[col] = "---"
+                        columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                            'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
+                            'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
+                            'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
+                            'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
+                            'TOTAL_TRIAL_INBLK','TRIAL_SSE']
+                        updated_output = updated_output[columns]
+                        updated_output.to_csv(pull_file, mode='a', header=False, index=False)
+                    else:
+                        print('DEBUG: Continue saving the first record.')
+                        create_exp_file(subj_id,part_group,updated_output)
+                
+                elif trial_no == 1 and block_no == 1:
+                    p_columns = ['pDISTRIBUTION','pAMP','pLOGICAL_AMP','pphyBOUND','pDISTANCE','pTRUE_CAT','pSUB RESPONSE','pFEEDBACK','pRT']
+                    for col in p_columns:
+                        updated_output[col] = "---"
+                    
+                    columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                        'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
+                        'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
+                        'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
+                        'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
+                        'TOTAL_TRIAL_INBLK','TRIAL_SSE']
+                    final_output = updated_output[columns]
+
+                    final_output.to_csv(pull_file, mode='a', header=False, index=False, encoding='utf-8-sig')
+                    print(f"DEBUG: Session {curr_sess} started. P-columns initialized with '---'.")
+                    
+                else: # do not need to create a new file
+                    old_df = pd.read_csv(
+                        pull_file,
+                        dtype={'ID': str}
+                    )
+                    last_trial = old_df.iloc[-1]
+                    updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
+                    updated_output['pAMP']          = last_trial['AMP']
+                    updated_output['pLOGICAL_AMP']  = last_trial['LOGICAL_AMP']
+                    updated_output['pphyBOUND']        = last_trial['PHY_BOUND']
+                    updated_output['pDISTANCE']     = last_trial['DISTANCE']
+                    updated_output['pTRUE_CAT']     = last_trial['TRUE_CAT']
+                    updated_output['pSUB RESPONSE'] = last_trial['SUB RESPONSE']
+                    updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
+                    updated_output['pRT']           = last_trial['RT']
+
+                    columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
+                        'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
+                        'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
+                        'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
+                        'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
+                        'TOTAL_TRIAL_INBLK','TRIAL_SSE']
+                    updated_output = updated_output[columns]
+
+                    updated_output.to_csv(pull_file, mode='a', header=False, index=False)
+
                 # Check for automatic breaks (every 200 formal trials)
                 if not in_warmup and formal_trial_count in [200, 400, 600, 800, 1000, 1200]:
                     show_break_dialog()
@@ -1756,83 +1833,6 @@ def experiment_update():
                         run_break()
                       
                         recent_responses.clear()
-
-                ### Save record
-                file_name = f"{subj_id}_{part_group}.csv"
-                pull_file = os.path.join(RESULT_PATH, file_name)
-                
-                if curr_sess == 1 and trial_no == 1 and block_no == 1:
-                    if os.path.exists(pull_file):
-                        # Appending to an existing file if repeating training
-                        old_df = pd.read_csv(pull_file, dtype={'ID': str})
-                        if not old_df.empty:
-                            last_trial = old_df.iloc[-1]
-                            updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
-                            updated_output['pAMP']          = last_trial['AMP']
-                            updated_output['pLOGICAL_AMP']  = last_trial['LOGICAL_AMP']
-                            updated_output['pphyBOUND']     = last_trial['PHY_BOUND']
-                            updated_output['pDISTANCE']     = last_trial['DISTANCE']
-                            updated_output['pTRUE_CAT']     = last_trial['TRUE_CAT']
-                            updated_output['pSUB RESPONSE'] = last_trial['SUB RESPONSE']
-                            updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
-                            updated_output['pRT']           = last_trial['RT']
-                        else:
-                            p_columns = ['pDISTRIBUTION','pAMP','pLOGICAL_AMP','pphyBOUND','pDISTANCE','pTRUE_CAT','pSUB RESPONSE','pFEEDBACK','pRT']
-                            for col in p_columns:
-                                updated_output[col] = "---"
-                        columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
-                            'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
-                            'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
-                            'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
-                            'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
-                            'TOTAL_TRIAL_INBLK','TRIAL_SSE']
-                        updated_output = updated_output[columns]
-                        updated_output.to_csv(pull_file, mode='a', header=False, index=False)
-                    else:
-                        print('DEBUG: Continue saving the first record.')
-                        create_exp_file(subj_id,part_group,updated_output)
-                
-                elif trial_no == 1 and block_no == 1:
-                    p_columns = ['pDISTRIBUTION','pAMP','pLOGICAL_AMP','pphyBOUND','pDISTANCE','pTRUE_CAT','pSUB RESPONSE','pFEEDBACK','pRT']
-                    for col in p_columns:
-                        updated_output[col] = "---"
-                    
-                    columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
-                        'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
-                        'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
-                        'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
-                        'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
-                        'TOTAL_TRIAL_INBLK','TRIAL_SSE']
-                    final_output = updated_output[columns]
-
-                    final_output.to_csv(pull_file, mode='a', header=False, index=False, encoding='utf-8-sig')
-                    print(f"DEBUG: Session {curr_sess} started. P-columns initialized with '---'.")
-                    
-                else: # do not need to create a new file
-                    old_df = pd.read_csv(
-                        pull_file,
-                        dtype={'ID': str}
-                    )
-                    last_trial = old_df.iloc[-1]
-                    updated_output['pDISTRIBUTION'] = last_trial['DISTRIBUTION']
-                    updated_output['pAMP']          = last_trial['AMP']
-                    updated_output['pLOGICAL_AMP']  = last_trial['LOGICAL_AMP']
-                    updated_output['pphyBOUND']        = last_trial['PHY_BOUND']
-                    updated_output['pDISTANCE']     = last_trial['DISTANCE']
-                    updated_output['pTRUE_CAT']     = last_trial['TRUE_CAT']
-                    updated_output['pSUB RESPONSE'] = last_trial['SUB RESPONSE']
-                    updated_output['pFEEDBACK']     = last_trial['FEEDBACK']
-                    updated_output['pRT']           = last_trial['RT']
-
-                    columns = ['ID','GROUP','SESSION','DATE','TIME','TRIAL_BLK','BLK_NO', 
-                        'DISTRIBUTION','AMP','LOGICAL_AMP','PHY_BOUND','DISTANCE','TRUE_CAT',
-                        'SUB RESPONSE', 'FEEDBACK', 'RT', 'CORRECT_B', 'CORRECT_S',
-                        'pDISTRIBUTION','pAMP','pphyBOUND','pDISTANCE','pTRUE_CAT',
-                        'pSUB RESPONSE','pFEEDBACK','pRT','TOTAL_BLK', 
-                        'TOTAL_TRIAL_INBLK','TRIAL_SSE']
-                    updated_output = updated_output[columns]
-
-                    updated_output.to_csv(pull_file, mode='a', header=False, index=False)
                 trial_finished = True
 
         # End of block checks
