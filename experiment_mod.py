@@ -43,6 +43,7 @@ Number of breaks:
 
 import pandas as pd
 import numpy as np
+import gc
 from psychopy import prefs
 prefs.hardware['audioLib'] = ['ptb']
 prefs.hardware['audioLatencyMode'] = 3
@@ -1320,6 +1321,9 @@ def experiment_update():
 
     core.wait(0.5)
 
+    warmup_sound.stop()
+    del warmup_sound
+    gc.collect()
     # ---------- keep selected theme ----------
     win0.color = bg_color
     text_stim.color = text_color
@@ -1484,12 +1488,21 @@ def experiment_update():
                 while resp_clock.getTime() < response_limit:
                     if not stim_started:
 
-                        if probe is None or curr_trial_sess % 20 == 1:
+                        if probe is None or curr_trial_sess % 10 == 1:
+
+                            if probe is not None:
+                                try:
+                                    probe.stop()
+                                except Exception:
+                                    pass
+
+                                del probe
+                                gc.collect()
 
                             probe = sound.Sound(
                                 "stimulus_400ms.wav"
                             )
-
+            
                         probe.setVolume(playback_volume)
 
                         probe.play()
